@@ -1,7 +1,9 @@
 'use client';
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import Image from "next/image";
 import LogoutButton from "./LogoutButton";
+import Link from "next/link";
 
 type BackgroundLayoutProps = {
   children: React.ReactNode;
@@ -13,6 +15,26 @@ export default function BackgroundLayout({
   children,
   showLogout = true,
 }: BackgroundLayoutProps) {
+  const [hasSession, setHasSession] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!alive) return;
+      setHasSession(!!data?.session);
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!alive) return;
+      setHasSession(!!session);
+    });
+
+    return () => {
+      alive = false;
+      sub?.subscription?.unsubscribe();
+    };
+  }, []);
   return (
     <div className="relative w-full min-h-[100dvh] overflow-x-hidden">
       {/* Hintergrundbild */}
@@ -44,9 +66,16 @@ export default function BackgroundLayout({
           />
         </div>
 
-        {showLogout ? (
-          <div className="mt-2 flex justify-end pointer-events-auto">
+        {showLogout && hasSession ? (
+          <div className="mt-2 flex flex-col items-end gap-2 pointer-events-auto">
             <LogoutButton className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-50" />
+
+            <Link
+              href="/notizen"
+              className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-50"
+            >
+              Notizen
+            </Link>
           </div>
         ) : null}
       </div>
