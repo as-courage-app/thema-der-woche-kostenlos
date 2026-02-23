@@ -360,7 +360,7 @@ export default function QuotesPage() {
 
   return (
     <RequireAuth>
-      <BackgroundLayout>
+      <BackgroundLayout activeThemeId={current?.id}>
         <div className="mx-auto flex h-full min-h-[100svh] lg:min-h-0 max-w-6xl px-10 py-3">
           <div className="w-full max-h-none lg:max-h-[calc(100vh-10rem)] rounded-none sm:rounded-2xl bg-white/98 sm:bg-white/85 shadow-none sm:shadow-xl backdrop-blur-md min-h-[100dvh] sm:min-h-0 overflow-visible lg:overflow-hidden flex flex-col">
             {/* Kopf */}

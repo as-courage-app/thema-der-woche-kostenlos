@@ -1,4 +1,4 @@
-'use client';
+"use client";
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Image from "next/image";
@@ -9,11 +9,18 @@ type BackgroundLayoutProps = {
   children: React.ReactNode;
   /** Wenn false: Logout-Button wird nicht angezeigt (z. B. auf /version). */
   showLogout?: boolean;
+
+  /**
+   * Optional: aktives Theme aus /quotes (oder anderen Seiten).
+   * Wenn gesetzt, wird /notizen?themeId=... verwendet.
+   */
+  activeThemeId?: string;
 };
 
 export default function BackgroundLayout({
   children,
   showLogout = true,
+  activeThemeId,
 }: BackgroundLayoutProps) {
   const [hasSession, setHasSession] = useState(false);
 
@@ -35,10 +42,18 @@ export default function BackgroundLayout({
       sub?.subscription?.unsubscribe();
     };
   }, []);
+
+  const notizenHref = activeThemeId
+    ? `/notizen?themeId=${encodeURIComponent(activeThemeId)}`
+    : "/notizen";
+
   return (
     <div className="relative w-full min-h-[100dvh] overflow-x-hidden">
       {/* Hintergrundbild */}
-      <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+      <div
+        className="pointer-events-none absolute inset-0 z-0"
+        aria-hidden="true"
+      >
         <Image
           src="/images/cover-01.jpg"
           alt=""
@@ -71,7 +86,7 @@ export default function BackgroundLayout({
             <LogoutButton className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-50" />
 
             <Link
-              href="/notizen"
+              href={notizenHref}
               className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-50"
             >
               Notizen
