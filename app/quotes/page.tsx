@@ -303,7 +303,8 @@ export default function QuotesPage() {
 
   const licenseTier: LicenseTier | undefined = setup?.selectedLicenseTier ?? setup?.licenseTier;
   const podcastAllowed = licenseTier === 'C';
-  const podcastReady = !!currentEpisode && currentThemeNumber !== null && currentThemeNumber <= 4;
+  const podcastReady =
+    !!currentEpisode && currentThemeNumber !== null && currentThemeNumber <= 20;
 
   const weekMondayDate = useMemo(() => {
     const base = parseIsoDate(setup?.startMonday);
