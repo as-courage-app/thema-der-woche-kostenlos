@@ -91,7 +91,8 @@ function NotizenContent() {
             'Thema'
         ) || 'Thema';
 
-      const zitat = found?.quote ?? found?.zitat ?? found?.Zitat ?? 'Zitat folgt…';
+      const zitat =
+        found?.quote ?? found?.zitat ?? found?.Zitat ?? 'Zitat folgt…';
 
       const q =
         found?.questions ??
@@ -184,71 +185,175 @@ function NotizenContent() {
   }
 
   return (
-    <BackgroundLayout>
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-4">
-        <div className="rounded-2xl bg-white/85 p-5 shadow-xl backdrop-blur-md">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="mb-3">
-                <Link
-                  href="/quotes"
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm transition hover:bg-slate-50 cursor-pointer"
-                >
-                  ← Zurück zu den Tagesimpulsen
-                </Link>
+    <>
+      {/* Druckregeln: weiß, ohne Hintergrund, ohne Buttons/Links/Navi */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4;
+            margin: 12mm;
+          }
+
+          html,
+          body {
+            background: white !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          /* App-Hintergründe/Blur/Schatten im Druck neutralisieren */
+          * {
+            box-shadow: none !important;
+            filter: none !important;
+            backdrop-filter: none !important;
+          }
+
+          /* Interaktives Zeug raus */
+          button,
+          a,
+          nav {
+            display: none !important;
+          }
+
+          /* Kein unnötiger Außenabstand auf Druckseite */
+          .print-page {
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: none !important;
+          }
+
+          /* Nur der Print-Block soll sichtbar sein */
+          .print-only {
+            display: block !important;
+          }
+          .screen-only {
+            display: none !important;
+          }
+
+          /* Textarea sauber druckbar */
+          textarea {
+            overflow: visible !important;
+          }
+        }
+
+        /* Standard: Print-Block bleibt sichtbar, aber Buttons bleiben am Screen */
+        .print-only {
+          display: block;
+        }
+      `}</style>
+
+      <BackgroundLayout>
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-4 print-page">
+          {/* Screen-Header mit Buttons (wird im Print ausgeblendet) */}
+          <div className="screen-only rounded-2xl bg-white/85 p-5 shadow-xl backdrop-blur-md">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="mb-3">
+                  <Link
+                    href="/quotes"
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm transition hover:bg-slate-50"
+                  >
+                    ← Zurück zu den Tagesimpulsen
+                  </Link>
+                </div>
+
+                <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+                  Notizen
+                </h1>
+                <p className="mt-1 text-sm text-slate-700">
+                  Zu deinem aktuellen Thema – speichern, löschen oder drucken.
+                </p>
               </div>
 
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-                Notizen
-              </h1>
-              <p className="mt-1 text-sm text-slate-700">
-                Zu deinem aktuellen Thema – speichern, löschen oder drucken.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={onSaveDownload}
-                className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-50"
-              >
-                Speichern
-              </button>
-              <button
-                type="button"
-                onClick={onClear}
-                className="cursor-pointer rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-700 shadow-sm transition hover:bg-rose-50"
-              >
-                Löschen
-              </button>
-              <button
-                type="button"
-                onClick={onPrint}
-                className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-50"
-              >
-                Drucken
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={onSaveDownload}
+                  className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-50"
+                >
+                  Speichern
+                </button>
+                <button
+                  type="button"
+                  onClick={onClear}
+                  className="cursor-pointer rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-700 shadow-sm transition hover:bg-rose-50"
+                >
+                  Löschen
+                </button>
+                <button
+                  type="button"
+                  onClick={onPrint}
+                  className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-50"
+                >
+                  Drucken
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="rounded-2xl bg-white/85 p-5 shadow-xl backdrop-blur-md print:bg-white print:shadow-none">
-          <h2 className="text-2xl font-semibold text-slate-900">{`Thema der Woche – ${temaLabel}`}</h2>
+          {/* SCREEN-INHALT: Hier ist das Zitat jetzt immer sichtbar */}
+          <div className="screen-only rounded-2xl bg-white/85 p-5 shadow-xl backdrop-blur-md">
+            <h2 className="text-2xl font-semibold text-slate-900">{`Thema der Woche – ${temaLabel}`}</h2>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="text-sm font-medium text-slate-900">Thema</div>
-              <div className="mt-1 text-base font-semibold text-slate-900">
-                {temaLabel}
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="text-sm font-medium text-slate-900">Thema</div>
+                <div className="mt-1 text-base font-semibold text-slate-900">
+                  {temaLabel}
+                </div>
+
+                <div className="mt-4 text-sm font-medium text-slate-900">Zitat</div>
+                <div className="mt-1 whitespace-pre-wrap text-sm text-slate-800">
+                  {quote}
+                </div>
               </div>
 
-              <div className="mt-4 text-sm font-medium text-slate-900">Zitat</div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="text-sm font-medium text-slate-900">Tagesimpulse</div>
+                <ul className="mt-2 space-y-2 text-sm text-slate-800">
+                  <li>
+                    <span className="font-semibold">Mo:</span> {questions.Mo}
+                  </li>
+                  <li>
+                    <span className="font-semibold">Di:</span> {questions.Di}
+                  </li>
+                  <li>
+                    <span className="font-semibold">Mi:</span> {questions.Mi}
+                  </li>
+                  <li>
+                    <span className="font-semibold">Do:</span> {questions.Do}
+                  </li>
+                  <li>
+                    <span className="font-semibold">Fr:</span> {questions.Fr}
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+              <div className="text-sm font-medium text-slate-900">Persönliche Notizen</div>
+              <textarea
+                ref={textareaRef}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Schreibe hier deine Notizen…"
+                className="mt-2 min-h-[240px] w-full rounded-xl border border-slate-300 bg-white p-3 text-base text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/20"
+              />
+            </div>
+          </div>
+
+          {/* Print-/Inhaltsblock (weiß im Print, ohne Blur) */}
+          <div className="print-only rounded-2xl bg-white/85 p-5 shadow-xl backdrop-blur-md print:bg-white print:shadow-none print:backdrop-blur-none print:p-0 print:rounded-none">
+            <h2 className="text-2xl font-semibold text-slate-900">{`Thema der Woche – ${temaLabel}`}</h2>
+
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4">
+              <div className="text-sm font-medium text-slate-900">Zitat</div>
               <div className="mt-1 whitespace-pre-wrap text-sm text-slate-800">
                 {quote}
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4">
               <div className="text-sm font-medium text-slate-900">Tagesimpulse</div>
               <ul className="mt-2 space-y-2 text-sm text-slate-800">
                 <li>
@@ -268,40 +373,24 @@ function NotizenContent() {
                 </li>
               </ul>
             </div>
-          </div>
 
-          <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-            <div className="text-sm font-medium text-slate-900">Persönliche Notizen</div>
-            <textarea
-              ref={textareaRef}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Schreibe hier deine Notizen…"
-              className="mt-2 min-h-[240px] w-full rounded-xl border border-slate-300 bg-white p-3 text-base text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/20 print:min-h-[400px]"
-            />
-          </div>
+            <div className="mt-3 text-sm text-slate-800">
+              Schreibe hier deine Notizen…
+            </div>
 
-          <div className="mt-6 text-sm text-slate-700 print:mt-8 print:text-slate-800">
-            App „Thema der Woche“ erstellt von Andreas Sedlag, Kompetenztrainer und systemischer Coach |{' '}
-            <a
-              href="https://www.as-courage.de"
-              target="_blank"
-              rel="noreferrer"
-              className="underline decoration-slate-300 underline-offset-2 hover:decoration-slate-500"
-            >
-              www.as-courage.de
-            </a>{' '}
-            | Email:{' '}
-            <a
-              href="mailto:kontakt@as-courage.de"
-              className="underline decoration-slate-300 underline-offset-2 hover:decoration-slate-500"
-            >
-              kontakt@as-courage.de
-            </a>
+            <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3">
+              <textarea
+                ref={textareaRef}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Schreibe hier deine Notizen…"
+                className="min-h-[320px] w-full rounded-xl border border-slate-300 bg-white p-3 text-base text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/20 print:min-h-[420px]"
+              />
+            </div>
           </div>
         </div>
-      </div>
-    </BackgroundLayout>
+      </BackgroundLayout>
+    </>
   );
 }
 
