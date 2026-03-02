@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import BackgroundLayout from '@/components/BackgroundLayout';
 import RequireAuth from '@/components/RequireAuth';
 import edition1 from '@/app/data/edition1.json';
@@ -16,6 +16,23 @@ const DEFAULT_QUESTIONS: Record<DayKey, string> = {
   Do: 'Frage 4 folgt…',
   Fr: 'Frage 5 folgt…',
 };
+
+function pad2(n: number) {
+  return String(n).padStart(2, '0');
+}
+
+function formatDateDEshort(d: Date) {
+  const dd = pad2(d.getDate());
+  const mm = pad2(d.getMonth() + 1);
+  const yy = pad2(d.getFullYear() % 100);
+  return `${dd}.${mm}.${yy}`; // 02.03.26
+}
+
+function addDays(base: Date, days: number) {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return d;
+}
 
 function NotizenContent() {
   const searchParams = useSearchParams();
@@ -36,34 +53,79 @@ function NotizenContent() {
     try {
       const v = localStorage.getItem(LS_NOTE_KEY);
       if (v) setNote(v);
-    } catch {}
+    } catch { }
   }, []);
 
   // Notiz lokal speichern
   useEffect(() => {
     try {
       localStorage.setItem(LS_NOTE_KEY, note);
-    } catch {}
+    } catch { }
   }, [note]);
 
-  // Thema / Zitat / Fragen aus Setup + Edition laden
-  useEffect(() => {
+  const { activeThemeId, weekStart } = useMemo(() => {
     try {
       const raw = localStorage.getItem('as-courage.themeSetup.v1');
-      if (!raw) return;
+      if (!raw) return { activeThemeId: null as any, weekStart: null as Date | null };
 
-      const setup: any = JSON.parse(raw);
+      const parsed: any = JSON.parse(raw);
 
-      const activeThemeId =
+      const active =
         themeIdFromUrl ??
-        (Array.isArray(setup?.themeIds) ? setup.themeIds[0] : null);
+        (Array.isArray(parsed?.themeIds) ? parsed.themeIds[0] : null) ??
+        parsed?.selectedThemeId ??
+        parsed?.themeId ??
+        parsed?.theme?.id ??
+        parsed?.selectedTheme?.id ??
+        null;
 
-      const themeIdOrNr =
-        activeThemeId ??
-        setup?.selectedThemeId ??
-        setup?.themeId ??
-        setup?.theme?.id ??
-        setup?.selectedTheme?.id;
+      // Woche berechnen: startMonday + (Index in themeIds) * 7
+      let ws: Date | null = null;
+      const startMondayStr: string | undefined = parsed?.startMonday;
+      const themeIds: any[] = Array.isArray(parsed?.themeIds) ? parsed.themeIds : [];
+
+      if (startMondayStr && typeof startMondayStr === 'string' && themeIds.length > 0 && active) {
+        const idx = themeIds.findIndex((id) => String(id) === String(active));
+        if (idx >= 0) {
+          const start = new Date(startMondayStr + 'T00:00:00');
+          if (!Number.isNaN(start.getTime())) {
+            ws = addDays(start, idx * 7);
+          }
+        }
+      }
+
+      return { activeThemeId: active, weekStart: ws };
+    } catch {
+      return { activeThemeId: null as any, weekStart: null as Date | null };
+    }
+  }, [themeIdFromUrl]);
+
+  const dayLabels = useMemo(() => {
+    const days: DayKey[] = ['Mo', 'Di', 'Mi', 'Do', 'Fr'];
+    const labels: Record<DayKey, string> = { Mo: 'Mo', Di: 'Di', Mi: 'Mi', Do: 'Do', Fr: 'Fr' };
+
+    if (!weekStart) {
+      // trotzdem Komma, damit die Textstarts bündig werden
+      labels.Mo = 'Mo';
+      labels.Di = 'Di';
+      labels.Mi = 'Mi';
+      labels.Do = 'Do';
+      labels.Fr = 'Fr';
+      return labels;
+    }
+
+    days.forEach((k, i) => {
+      const d = addDays(weekStart, i);
+      labels[k] = `${k}, ${formatDateDEshort(d)}`;
+    });
+
+    return labels;
+  }, [weekStart]);
+
+  // Thema / Zitat / Fragen laden
+  useEffect(() => {
+    try {
+      const themeIdOrNr = activeThemeId;
 
       const themes: any[] =
         (edition1 as any)?.themes ??
@@ -84,11 +146,11 @@ function NotizenContent() {
       const label =
         String(
           found?.title ??
-            found?.name ??
-            found?.thema ??
-            found?.label ??
-            found?.id ??
-            'Thema'
+          found?.name ??
+          found?.thema ??
+          found?.label ??
+          found?.id ??
+          'Thema'
         ) || 'Thema';
 
       const zitat =
@@ -114,40 +176,28 @@ function NotizenContent() {
         nextQuestions.Mo =
           (q as any).Mo ?? (q as any).mo ?? (q as any).monday ?? nextQuestions.Mo;
         nextQuestions.Di =
-          (q as any).Di ??
-          (q as any).di ??
-          (q as any).tuesday ??
-          nextQuestions.Di;
+          (q as any).Di ?? (q as any).di ?? (q as any).tuesday ?? nextQuestions.Di;
         nextQuestions.Mi =
-          (q as any).Mi ??
-          (q as any).mi ??
-          (q as any).wednesday ??
-          nextQuestions.Mi;
+          (q as any).Mi ?? (q as any).mi ?? (q as any).wednesday ?? nextQuestions.Mi;
         nextQuestions.Do =
-          (q as any).Do ??
-          (q as any).do ??
-          (q as any).thursday ??
-          nextQuestions.Do;
+          (q as any).Do ?? (q as any).do ?? (q as any).thursday ?? nextQuestions.Do;
         nextQuestions.Fr =
-          (q as any).Fr ??
-          (q as any).fr ??
-          (q as any).friday ??
-          nextQuestions.Fr;
+          (q as any).Fr ?? (q as any).fr ?? (q as any).friday ?? nextQuestions.Fr;
       }
 
       setTemaLabel(label);
       setQuote(String(zitat ?? 'Zitat folgt…'));
       setQuestions(nextQuestions);
     } catch {
-      // bewusst still: Seite soll nie abstürzen
+      // still
     }
-  }, [themeIdFromUrl]);
+  }, [activeThemeId]);
 
   function onClear() {
     setNote('');
     try {
       localStorage.removeItem(LS_NOTE_KEY);
-    } catch {}
+    } catch { }
     textareaRef.current?.focus();
   }
 
@@ -157,14 +207,14 @@ function NotizenContent() {
       `Thema: ${temaLabel}\n\n` +
       `Zitat: ${quote}\n\n` +
       `Tagesimpulse:\n` +
-      `Mo: ${questions.Mo}\n` +
-      `Di: ${questions.Di}\n` +
-      `Mi: ${questions.Mi}\n` +
-      `Do: ${questions.Do}\n` +
-      `Fr: ${questions.Fr}\n\n` +
+      `${dayLabels.Mo}, ${questions.Mo}\n` +
+      `${dayLabels.Di}, ${questions.Di}\n` +
+      `${dayLabels.Mi}, ${questions.Mi}\n` +
+      `${dayLabels.Do}, ${questions.Do}\n` +
+      `${dayLabels.Fr}, ${questions.Fr}\n\n` +
       `Notizen:\n${note}\n\n` +
       `---\n` +
-      `App „Thema der Woche“ erstellt von Andreas Sedlag, Kompetenztrainer und systemischer Coach | www.as-courage.de | Email: kontakt@as-courage.de\n`;
+      `Projekt von Andreas Sedlag, Kompetenztrainer und systemischer Coach | www.thema-der-woche.com | mailto: (t.b.d.)\n`;
 
     const safeName = String(temaLabel)
       .replace(/\s+/g, '_')
@@ -186,65 +236,82 @@ function NotizenContent() {
 
   return (
     <>
-      {/* Druckregeln: weiß, ohne Hintergrund, ohne Buttons/Links/Navi */}
       <style>{`
         @media print {
           @page {
             size: A4;
-            margin: 12mm;
+            margin: 12mm 12mm 18mm 12mm; /* unten Platz für Footer */
           }
 
-          html,
-          body {
+          html, body {
             background: white !important;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
 
-          /* App-Hintergründe/Blur/Schatten im Druck neutralisieren */
+          body { background-image: none !important; }
+.print-page-bg { display: none !important; }
           * {
             box-shadow: none !important;
             filter: none !important;
             backdrop-filter: none !important;
           }
 
-          /* Interaktives Zeug raus */
-          button,
-          a,
-          nav {
+          /* Buttons/Links/Navi im Inhalt ausblenden */
+          button, nav, .screen-only {
             display: none !important;
           }
 
-          /* Kein unnötiger Außenabstand auf Druckseite */
-          .print-page {
-            padding: 0 !important;
-            margin: 0 !important;
-            max-width: none !important;
+          /* Layout im Druck immer zweispaltig für Thema/Zitat vs Tagesimpulse */
+          .two-col {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 12px !important;
           }
 
-          /* Nur der Print-Block soll sichtbar sein */
-          .print-only {
-            display: block !important;
-          }
-          .screen-only {
-            display: none !important;
-          }
-
-          /* Textarea sauber druckbar */
-          textarea {
+          /* Print-Notizen: als Fließtext druckbar (mehrere Seiten möglich) */
+          .print-note-box {
+            white-space: pre-wrap;
             overflow: visible !important;
           }
+
+          .print-footer {
+            display: block !important;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 6mm;
+            font-size: 10px;
+            color: #334155;
+            text-align: center;
+          }
+
+          /* Hinweis: Chrome liefert hier keine zuverlässigen Page-Counter in HTML */
+          .print-footer .pagehint {
+            margin-left: 6px;
+            opacity: 0.9;
+          }
         }
 
-        /* Standard: Print-Block bleibt sichtbar, aber Buttons bleiben am Screen */
-        .print-only {
-          display: block;
-        }
+        /* Print-Footer am Screen verstecken */
+        .print-footer {
+  display: block !important;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 6mm;
+  font-size: 10px;
+  color: #334155;
+  text-align: center;
+  background: white;
+  z-index: 9999;
+  padding: 2mm 4mm;
+}
       `}</style>
 
       <BackgroundLayout>
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-4 print-page">
-          {/* Screen-Header mit Buttons (wird im Print ausgeblendet) */}
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-4">
+          {/* Header + Buttons */}
           <div className="screen-only rounded-2xl bg-white/85 p-5 shadow-xl backdrop-blur-md">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -291,11 +358,12 @@ function NotizenContent() {
             </div>
           </div>
 
-          {/* SCREEN-INHALT: Hier ist das Zitat jetzt immer sichtbar */}
-          <div className="screen-only rounded-2xl bg-white/85 p-5 shadow-xl backdrop-blur-md">
+          {/* Inhalt */}
+          <div className="rounded-2xl bg-white/85 p-5 shadow-xl backdrop-blur-md print:bg-white print:shadow-none print:backdrop-blur-none print:p-5 print:rounded-2xl">
             <h2 className="text-2xl font-semibold text-slate-900">{`Thema der Woche – ${temaLabel}`}</h2>
 
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {/* Thema/Zitat + Tagesimpulse nebeneinander (Screen & Print) */}
+            <div className="two-col mt-4 grid gap-4 md:grid-cols-2">
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="text-sm font-medium text-slate-900">Thema</div>
                 <div className="mt-1 text-base font-semibold text-slate-900">
@@ -311,82 +379,41 @@ function NotizenContent() {
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="text-sm font-medium text-slate-900">Tagesimpulse</div>
                 <ul className="mt-2 space-y-2 text-sm text-slate-800">
-                  <li>
-                    <span className="font-semibold">Mo:</span> {questions.Mo}
-                  </li>
-                  <li>
-                    <span className="font-semibold">Di:</span> {questions.Di}
-                  </li>
-                  <li>
-                    <span className="font-semibold">Mi:</span> {questions.Mi}
-                  </li>
-                  <li>
-                    <span className="font-semibold">Do:</span> {questions.Do}
-                  </li>
-                  <li>
-                    <span className="font-semibold">Fr:</span> {questions.Fr}
-                  </li>
+                  {(['Mo', 'Di', 'Mi', 'Do', 'Fr'] as DayKey[]).map((k) => (
+                    <li key={k} className="grid grid-cols-[110px_1fr] gap-2">
+                      <span className="font-semibold whitespace-nowrap">{dayLabels[k]}</span>
+                      <span>{questions[k]}</span>
+                    </li>
+                  ))}
                 </ul>
               </div>
             </div>
 
+            {/* Notizen: Screen = textarea, Print = Fließtext (damit kurze Notizen 1 Seite bleiben) */}
             <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
               <div className="text-sm font-medium text-slate-900">Persönliche Notizen</div>
+
               <textarea
                 ref={textareaRef}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Schreibe hier deine Notizen…"
-                className="mt-2 min-h-[240px] w-full rounded-xl border border-slate-300 bg-white p-3 text-base text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/20"
+                className="screen-only mt-2 min-h-[240px] w-full rounded-xl border border-slate-300 bg-white p-3 text-base text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/20"
               />
+
+              <div className="print-note-box mt-2 hidden rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 print:block">
+                {note?.trim() ? note : '—'}
+              </div>
             </div>
           </div>
 
-          {/* Print-/Inhaltsblock (weiß im Print, ohne Blur) */}
-          <div className="print-only rounded-2xl bg-white/85 p-5 shadow-xl backdrop-blur-md print:bg-white print:shadow-none print:backdrop-blur-none print:p-0 print:rounded-none">
-            <h2 className="text-2xl font-semibold text-slate-900">{`Thema der Woche – ${temaLabel}`}</h2>
-
-            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4">
-              <div className="text-sm font-medium text-slate-900">Zitat</div>
-              <div className="mt-1 whitespace-pre-wrap text-sm text-slate-800">
-                {quote}
-              </div>
-            </div>
-
-            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4">
-              <div className="text-sm font-medium text-slate-900">Tagesimpulse</div>
-              <ul className="mt-2 space-y-2 text-sm text-slate-800">
-                <li>
-                  <span className="font-semibold">Mo:</span> {questions.Mo}
-                </li>
-                <li>
-                  <span className="font-semibold">Di:</span> {questions.Di}
-                </li>
-                <li>
-                  <span className="font-semibold">Mi:</span> {questions.Mi}
-                </li>
-                <li>
-                  <span className="font-semibold">Do:</span> {questions.Do}
-                </li>
-                <li>
-                  <span className="font-semibold">Fr:</span> {questions.Fr}
-                </li>
-              </ul>
-            </div>
-
-            <div className="mt-3 text-sm text-slate-800">
-              Schreibe hier deine Notizen…
-            </div>
-
-            <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3">
-              <textarea
-                ref={textareaRef}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Schreibe hier deine Notizen…"
-                className="min-h-[320px] w-full rounded-xl border border-slate-300 bg-white p-3 text-base text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/20 print:min-h-[420px]"
-              />
-            </div>
+          {/* Footer nur im Druck (mit Links). Seitenzahlen: bitte in Chrome „Kopf- und Fußzeilen“ aktivieren */}
+          <div className="print-footer">
+            <span>Projekt von Andreas Sedlag, Kompetenztrainer und systemischer Coach | </span>
+            <a href="https://www.thema-der-woche.com">www.thema-der-woche.com</a>
+            <span> | </span>
+            <a href="mailto:t.b.d.">mailto: (t.b.d.)</a>
+            <span className="pagehint"> | Seitenzahl: </span>
           </div>
         </div>
       </BackgroundLayout>
