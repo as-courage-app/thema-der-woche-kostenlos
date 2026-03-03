@@ -7,6 +7,13 @@ type Props = {
   title?: string;
 };
 
+function formatTime(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export default function PodcastMiniPlayer({ src, title }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -121,7 +128,7 @@ export default function PodcastMiniPlayer({ src, title }: Props) {
             aria-label="Position"
           />
           <div className="mt-1 text-xs text-slate-600">
-            {Math.floor(currentTime)}s / {Math.floor(duration)}s
+            {formatTime(currentTime)} / {formatTime(duration)}
           </div>
         </div>
       </div>

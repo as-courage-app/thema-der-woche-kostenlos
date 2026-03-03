@@ -505,7 +505,23 @@ export default function QuotesPage() {
             </div>
 
             {showPodcast && podcastAllowed && currentEpisode ? (
-              <PodcastMiniPlayer src={currentEpisode.audioSrc} title={currentEpisode.title} />
+              <PodcastMiniPlayer
+                src={currentEpisode.audioSrc}
+                title={(() => {
+                  const src = currentEpisode.audioSrc || '';
+                  const match = src.match(/thema-(\d+)\.mp3$/i);
+                  const nr = match ? Number(match[1]) : NaN;
+
+                  if (!Number.isFinite(nr)) return currentEpisode.title;
+
+                  const prefix = `ed1-${String(nr).padStart(2, '0')}-`;
+                  const theme = (edition1 as any[]).find((t) =>
+                    String(t?.id ?? '').startsWith(prefix)
+                  );
+
+                  return theme?.title?.trim() || currentEpisode.title || `Podcast Folge ${nr}`;
+                })()}
+              />
             ) : null}
 
             {/* Split-Bereich */}

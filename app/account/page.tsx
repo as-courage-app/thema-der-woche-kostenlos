@@ -485,7 +485,6 @@ export default function AccountPage() {
                   className="mt-0.5 h-4 w-4 cursor-pointer rounded border-slate-300"
                 />
                 <span>
-                  Ich habe die{' '}
                   <Link href="/datenschutz" className="underline hover:no-underline">
                     Datenschutzhinweise
                   </Link>{' '}
@@ -519,11 +518,10 @@ export default function AccountPage() {
                 <button
                   type="button"
                   onClick={() => setMode('login')}
-                  className={`cursor-pointer rounded-xl px-3 py-2 text-sm font-semibold transition ${
-                    mode === 'login'
+                  className={`cursor-pointer rounded-xl px-3 py-2 text-sm font-semibold transition ${mode === 'login'
                       ? 'bg-slate-900 text-white shadow-md'
                       : 'bg-white/90 text-slate-900 shadow-md ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-xl hover:ring-slate-400'
-                  } focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900`}
+                    } focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900`}
                 >
                   Anmelden
                 </button>
