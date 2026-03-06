@@ -15,7 +15,11 @@ export default function VersionPage() {
     } catch {
       // bewusst leer
     }
-    router.push(next === 'free' ? '/start' : '/account');
+    if (next === 'free') {
+  window.location.href = 'https://thema-der-woche-freeware.vercel.app/version';
+} else {
+  router.push('/account');
+}
   }
   const [mounted, setMounted] = useState(false);
 
@@ -73,7 +77,7 @@ export default function VersionPage() {
                 psychologische Sicherheit
               </a>{' '}
               durch kurze, alltagstaugliche Reflexionsfragen – perfekt als Gesprächseinstieg, Check-in im Team oder für die eigene
-              Selbstführung.
+              Selbstführung. <span className="font-semibold">Links zur App (kostenlos und Vollversion) weiter unten!</span>
             </p>
 
           </div>
@@ -120,11 +124,11 @@ export default function VersionPage() {
             <button
               type="button"
               onClick={() => choose('free')}
-              className="block h-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition hover:bg-slate-50"
+              className="block h-full cursor-pointer rounded-2xl border-2 border-slate-300 bg-white px-4 py-4 text-left shadow-md transition duration-200 hover:-translate-y-1 hover:border-slate-500 hover:bg-slate-50 hover:shadow-xl hover:ring-4 hover:ring-slate-200 focus:outline-none focus:ring-4 focus:ring-slate-300"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-base font-semibold text-slate-900">Kostenlose Version</div>
+                  <div className="text-base font-semibold text-slate-900">Kostenlose Version - hier klicken</div>
                 </div>
               </div>
 
@@ -155,11 +159,11 @@ export default function VersionPage() {
             <button
               type="button"
               onClick={() => choose('full')}
-              className="block h-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition hover:bg-slate-50"
+              className="block h-full cursor-pointer rounded-2xl border-2 border-slate-300 bg-white px-4 py-4 text-left shadow-md transition duration-200 hover:-translate-y-1 hover:border-slate-500 hover:bg-slate-50 hover:shadow-xl hover:ring-4 hover:ring-slate-200 focus:outline-none focus:ring-4 focus:ring-slate-300"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-base font-semibold text-slate-900">Vollversion (Lizenz)</div>
+                  <div className="text-base font-semibold text-slate-900">Vollversion (Lizenz) - hier klicken</div>
 
                 </div>
               </div>
@@ -185,7 +189,7 @@ export default function VersionPage() {
               href="https://forms.gle/5hVJ7qVBfsgSd1EBA"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
+              className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-md"
             >
               Für Verbesserungsvorschläge und Rückmeldungen (Google Formular)
               <span aria-hidden="true">↗</span>

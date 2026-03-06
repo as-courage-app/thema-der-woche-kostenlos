@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import BackgroundLayout from '../../components/BackgroundLayout';
 import Link from 'next/link';
@@ -23,7 +23,7 @@ type SetupState = {
   selectedLicenseTier?: LicenseTier;
 
   // ✅ iCal-Wunsch (nur in C aktivierbar)
-  icalEnabled?: boolean;
+
 };
 
 function isMondayISO(iso: string) {
@@ -69,15 +69,6 @@ export default function SetupPage() {
     }
   }, []);
 
-  // ✅ iCal (nur wenn C)
-  const [icalEnabled, setIcalEnabled] = useState<boolean>(false);
-  const isIcalAllowed = useMemo(() => selectedLicenseTier === 'C', [selectedLicenseTier]);
-
-  // Wenn Lizenz nicht C: iCal sicherheitshalber aus (damit keine „Altwerte“ bleiben)
-  useEffect(() => {
-    if (!isIcalAllowed && icalEnabled) setIcalEnabled(false);
-  }, [isIcalAllowed, icalEnabled]);
-
   useEffect(() => {
     if (isFree) setWeeksCount(FREE_WEEKS_COUNT);
   }, [isFree]);
@@ -103,7 +94,7 @@ export default function SetupPage() {
       if (s.selectedLicenseTier === 'A' || s.selectedLicenseTier === 'B' || s.selectedLicenseTier === 'C') {
         setSelectedLicenseTier(s.selectedLicenseTier);
       }
-      setIcalEnabled(Boolean(s.icalEnabled));
+
     } catch {
       // ignorieren
     }
@@ -133,7 +124,6 @@ export default function SetupPage() {
       createdAt: new Date().toISOString(),
 
       selectedLicenseTier,
-      icalEnabled: isIcalAllowed ? icalEnabled : false,
     };
 
     const weeksCountSafe = isFree
@@ -284,32 +274,6 @@ export default function SetupPage() {
                   </span>
                 </div>
               </div>
-            </div>
-
-            {/* ✅ iCal sichtbar für alle, aber nur in C aktivierbar */}
-            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
-              <label className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4"
-                  checked={isIcalAllowed ? icalEnabled : false}
-                  disabled={!isIcalAllowed}
-                  onChange={(e) => setIcalEnabled(e.target.checked)}
-                />
-                <span className="text-sm text-slate-800">
-                  Teamkalender/iCal für diese Planung erzeugen
-                  <span className="block text-xs text-slate-600">
-                    {isIcalAllowed ? (
-                      <>Wenn aktiviert, erscheint später auf „Zitate &amp; Tagesimpulse“ ein Download-Button.</>
-                    ) : (
-                      <>
-                        Diese Funktion ist nur in <span className="font-semibold">Variante C</span> enthalten.
-                        Du kannst Variante C auswählen, um die Option zu aktivieren.
-                      </>
-                    )}
-                  </span>
-                </span>
-              </label>
             </div>
 
             {error && (

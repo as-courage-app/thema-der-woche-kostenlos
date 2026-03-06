@@ -122,39 +122,29 @@ export default function ThemesPage() {
 
   // Plan + iCal-Vorliebe laden
   useEffect(() => {
-  let planC = false;
+    let planC = false;
 
-  try {
-    planC = localStorage.getItem(SELECTED_PLAN_KEY) === 'C';
-  } catch {
-    planC = false;
-  }
-
-  try {
-    const raw = localStorage.getItem(SETUP_KEY);
-    if (raw) {
-      const s = JSON.parse(raw) as { icalEnabled?: boolean; selectedLicenseTier?: 'A' | 'B' | 'C' };
-      if (s.selectedLicenseTier === 'C') planC = true; // Fallback aus Setup
-      setIcalPref(Boolean(s.icalEnabled));
+    try {
+      planC = localStorage.getItem(SELECTED_PLAN_KEY) === 'C';
+    } catch {
+      planC = false;
     }
-  } catch {
-    // ignorieren
-  }
 
-  setIsPlanC(planC);
-}, []);
-
-  // iCal-Vorliebe speichern (nur wenn Plan C, sonst immer false)
-  useEffect(() => {
     try {
       const raw = localStorage.getItem(SETUP_KEY);
-      const prev = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-      const next = { ...prev, icalEnabled: isPlanC ? icalPref : false };
-      localStorage.setItem(SETUP_KEY, JSON.stringify(next));
+      if (raw) {
+        const s = JSON.parse(raw) as { icalEnabled?: boolean; selectedLicenseTier?: 'A' | 'B' | 'C' };
+        if (s.selectedLicenseTier === 'C') planC = true; // Fallback aus Setup
+        setIcalPref(Boolean(s.icalEnabled));
+      }
     } catch {
       // ignorieren
     }
-  }, [isPlanC, icalPref]);
+
+    setIsPlanC(planC);
+  }, []);
+
+  // iCal-Vorliebe speichern (nur wenn Plan C, sonst immer false)
 
   useEffect(() => {
     setAppMode(getAppMode());
@@ -170,6 +160,25 @@ export default function ThemesPage() {
   const [mode, setMode] = useState<Mode>('manual');
   const [weeksCount, setWeeksCount] = useState<number>(4);
   const [startMonday, setStartMonday] = useState<string>(nextMondayISO());
+
+  // iCal-Vorliebe + Datumsbasis in SETUP_KEY speichern
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SETUP_KEY);
+      const prev = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+
+      const next = {
+        ...prev,
+        icalEnabled: isPlanC ? icalPref : false,
+        weeksCount,
+        startMonday,
+      };
+
+      localStorage.setItem(SETUP_KEY, JSON.stringify(next));
+    } catch {
+      // ignorieren
+    }
+  }, [isPlanC, icalPref, weeksCount, startMonday]);
 
   const [error, setError] = useState<string | null>(null);
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
