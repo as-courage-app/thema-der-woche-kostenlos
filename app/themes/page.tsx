@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import BackgroundLayout from '../../components/BackgroundLayout';
 import { getAppMode, FREE_ALLOWED_THEMES, FREE_WEEKS_COUNT } from '@/lib/appMode';
 import RequireAuth from '@/components/RequireAuth';
-import { SELECTED_PLAN_KEY } from '@/lib/storageKeys';
+import { readCurrentUserPlan } from '@/lib/userPlan';
 
 // Datei muss liegen unter: app/data/edition1.json
 import edition1 from '../data/edition1.json';
@@ -118,30 +118,46 @@ export default function ThemesPage() {
   const SETUP_KEY = 'as-courage.themeSetup.v1';
 
   const [isPlanC, setIsPlanC] = useState(false);
+  const [currentUserPlan, setCurrentUserPlan] = useState<'A' | 'B' | 'C' | null>(null);
   const [icalPref, setIcalPref] = useState(false);
 
   // Plan + iCal-Vorliebe laden
   useEffect(() => {
-    let planC = false;
+    let alive = true;
 
-    try {
-      planC = localStorage.getItem(SELECTED_PLAN_KEY) === 'C';
-    } catch {
-      planC = false;
-    }
+    async function loadPlanAndIcalPref() {
+      let plan: 'A' | 'B' | 'C' | null = null;
+      let planC = false;
 
-    try {
-      const raw = localStorage.getItem(SETUP_KEY);
-      if (raw) {
-        const s = JSON.parse(raw) as { icalEnabled?: boolean; selectedLicenseTier?: 'A' | 'B' | 'C' };
-        if (s.selectedLicenseTier === 'C') planC = true; // Fallback aus Setup
-        setIcalPref(Boolean(s.icalEnabled));
+      try {
+        plan = await readCurrentUserPlan();
+      } catch {
+        plan = null;
       }
-    } catch {
-      // ignorieren
+
+      if (!alive) return;
+
+      setCurrentUserPlan(plan);
+      planC = plan === 'C';
+
+      try {
+        const raw = localStorage.getItem(SETUP_KEY);
+        if (raw) {
+          const s = JSON.parse(raw) as { icalEnabled?: boolean };
+          setIcalPref(Boolean(s.icalEnabled));
+        }
+      } catch {
+        // ignorieren
+      }
+
+      setIsPlanC(planC);
     }
 
-    setIsPlanC(planC);
+    loadPlanAndIcalPref();
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
   // iCal-Vorliebe speichern (nur wenn Plan C, sonst immer false)

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { readCurrentUserPlan } from '@/lib/userPlan';
 import BackgroundLayout from '../../components/BackgroundLayout';
 import edition1 from '../data/edition1.json';
 import Link from 'next/link';
@@ -244,6 +245,7 @@ export default function QuotesPage() {
   const router = useRouter();
 
   const [setup, setSetup] = useState<SetupState | null>(null);
+  const [currentUserPlan, setCurrentUserPlan] = useState<'A' | 'B' | 'C' | null>(null);
   const [activeDay, setActiveDay] = useState<Record<string, number>>({});
   const [pageIndex, setPageIndex] = useState<number>(0);
 
@@ -251,21 +253,36 @@ export default function QuotesPage() {
   const [imgFallbackToDemo, setImgFallbackToDemo] = useState<boolean>(false);
 
   useEffect(() => {
-    const s = readSetup();
-    setSetup(s);
+    let alive = true;
 
-    console.log('TDW setup:', s);
-    console.log('TDW startMonday:', s?.startMonday);
-    console.log('TDW weeksCount:', s?.weeksCount);
-    console.log('TDW themeIds:', s?.themeIds);
+    async function loadPageData() {
+      const s = readSetup();
+      const plan = await readCurrentUserPlan();
 
-    const ids = s?.themeIds ?? [];
-    const initialDays: Record<string, number> = {};
-    for (const id of ids) initialDays[id] = 0;
-    setActiveDay(initialDays);
+      if (!alive) return;
 
-    setPageIndex(0);
-    setImgFallbackToDemo(false);
+      setSetup(s);
+      setCurrentUserPlan(plan);
+
+      console.log('TDW setup:', s);
+      console.log('TDW startMonday:', s?.startMonday);
+      console.log('TDW weeksCount:', s?.weeksCount);
+      console.log('TDW themeIds:', s?.themeIds);
+
+      const ids = s?.themeIds ?? [];
+      const initialDays: Record<string, number> = {};
+      for (const id of ids) initialDays[id] = 0;
+      setActiveDay(initialDays);
+
+      setPageIndex(0);
+      setImgFallbackToDemo(false);
+    }
+
+    loadPageData();
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const selectedThemes = useMemo(() => {
@@ -355,9 +372,8 @@ export default function QuotesPage() {
 
   // ✅ Button nur bei C + iCal-Haken (robust: alter/neuer Feldname)
   const showIcalButton = useMemo(() => {
-    const tier = setup?.selectedLicenseTier ?? setup?.licenseTier;
-    return tier === 'C' && Boolean(setup?.icalEnabled);
-  }, [setup]);
+    return currentUserPlan === 'C' && Boolean(setup?.icalEnabled);
+  }, [currentUserPlan, setup]);
 
   return (
     <RequireAuth>

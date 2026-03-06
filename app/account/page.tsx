@@ -6,10 +6,13 @@ import { useRouter } from 'next/navigation';
 import BackgroundLayout from '@/components/BackgroundLayout';
 import { supabase } from '@/lib/supabaseClient';
 import { SELECTED_PLAN_KEY } from '@/lib/storageKeys';
+import { readCurrentUserPlan } from '@/lib/userPlan';
 
 const CONSENT_KEY = 'as-courage.consent.v1';
 const CHECKOUT_EMAIL_KEY = 'as-courage.checkoutEmail.v1';
 const REMEMBER_ME_KEY = 'as-courage.rememberMe.v1';
+
+type PlanTier = 'A' | 'B' | 'C';
 
 type ConsentState = {
   acceptTerms: boolean;
@@ -38,7 +41,12 @@ function writeConsent(v: ConsentState) {
   }
 }
 
-function readSelectedPlan(): 'A' | 'B' | 'C' | null {
+/**
+ * TEMPORÄR:
+ * Lokaler Zwischenspeicher für den aktuell gestarteten Checkout.
+ * Diese Stelle wird später durch serverseitiges Lesen aus Supabase ersetzt.
+ */
+function readPendingCheckoutPlan(): PlanTier | null {
   try {
     const v = localStorage.getItem(SELECTED_PLAN_KEY);
     return v === 'A' || v === 'B' || v === 'C' ? v : null;
@@ -47,7 +55,12 @@ function readSelectedPlan(): 'A' | 'B' | 'C' | null {
   }
 }
 
-function writeSelectedPlan(plan: 'A' | 'B' | 'C') {
+/**
+ * TEMPORÄR:
+ * Lokaler Zwischenspeicher für den aktuell gestarteten Checkout.
+ * Diese Stelle wird später durch serverseitiges Schreiben/Lesen ersetzt.
+ */
+function writePendingCheckoutPlan(plan: PlanTier) {
   try {
     localStorage.setItem(SELECTED_PLAN_KEY, plan);
   } catch {
@@ -103,9 +116,10 @@ export default function AccountPage() {
 
   const [loading, setLoading] = useState(false);
 
-  // Zahlung
+  // Zahlung / aktuell lokal gepufferter Checkout-Plan
   const [paid, setPaid] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<'A' | 'B' | 'C' | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<PlanTier | null>(null);
+  const [currentUserPlan, setCurrentUserPlan] = useState<PlanTier | null>(null);
 
   // Consent
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -133,8 +147,8 @@ export default function AccountPage() {
     setAcceptTerms(c.acceptTerms);
     setAcceptPrivacy(c.acceptPrivacy);
 
-    const p = readSelectedPlan();
-    setSelectedPlan(p);
+    const pendingPlan = readPendingCheckoutPlan();
+    setSelectedPlan(pendingPlan);
 
     const checkoutMail = readCheckoutEmail();
     if (checkoutMail) setEmail(checkoutMail);
@@ -165,7 +179,15 @@ export default function AccountPage() {
       if (!mounted) return;
       const mail = data.session?.user?.email ?? null;
       setAuthedEmail(mail);
-      if (mail) setEmail(mail);
+
+      if (mail) {
+        setEmail(mail);
+        const plan = await readCurrentUserPlan();
+        if (!mounted) return;
+        setCurrentUserPlan(plan);
+      } else {
+        setCurrentUserPlan(null);
+      }
     }
 
     init();
@@ -173,7 +195,15 @@ export default function AccountPage() {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       const mail = session?.user?.email ?? null;
       setAuthedEmail(mail);
-      if (mail) setEmail(mail);
+
+      if (mail) {
+        setEmail(mail);
+        readCurrentUserPlan().then((plan) => {
+          setCurrentUserPlan(plan);
+        });
+      } else {
+        setCurrentUserPlan(null);
+      }
     });
 
     return () => {
@@ -222,9 +252,9 @@ export default function AccountPage() {
       setAcceptTerms(true);
       setAcceptPrivacy(true);
 
-      // Plan noch mal aus LocalStorage
-      const p = readSelectedPlan();
-      setSelectedPlan(p);
+      // Plan noch einmal aus lokalem Checkout-Zwischenspeicher laden
+      const pendingPlan = readPendingCheckoutPlan();
+      setSelectedPlan(pendingPlan);
 
       setTopNotice('Zahlung erfolgreich. 🎉 Jetzt kannst du dein Konto anlegen.');
     }
@@ -286,7 +316,7 @@ export default function AccountPage() {
     }
   }
 
-  async function startCheckout(plan: 'A' | 'B' | 'C') {
+  async function startCheckout(plan: PlanTier) {
     setTopNotice(null);
 
     if (!consentOk) {
@@ -294,7 +324,7 @@ export default function AccountPage() {
       return;
     }
 
-    writeSelectedPlan(plan);
+    writePendingCheckoutPlan(plan);
     setSelectedPlan(plan);
 
     if (email) writeCheckoutEmail(email);
@@ -354,7 +384,6 @@ export default function AccountPage() {
 
   return (
     <BackgroundLayout>
-      {/* Nach erfolgreicher Zahlung: CTA */}
       {paid && (
         <section className="mx-auto mt-6 w-full max-w-3xl px-4">
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
@@ -386,7 +415,6 @@ export default function AccountPage() {
 
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
         <section suppressHydrationWarning className="rounded-2xl bg-white/85 p-6 shadow-xl backdrop-blur-md">
-          {/* Navigation (oben rechts) */}
           <div className="mb-4 flex items-start justify-end gap-2">
             <Link
               href="/themes"
@@ -512,7 +540,6 @@ export default function AccountPage() {
             zugestimmt hast.
           </p>
 
-          {/* Checkboxen */}
           <div className="mt-3 max-w-md">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <label className="flex cursor-pointer items-start gap-2 rounded-xl bg-white/70 px-3 py-2 text-xs text-slate-800 ring-1 ring-slate-200">
@@ -562,14 +589,12 @@ export default function AccountPage() {
 
           <hr className="my-6 border-slate-200/70" />
 
-          {/* Login-Bereich */}
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-lg font-semibold text-slate-900">Anmelden</h2>
 
-              <div className="flex flex-wrap items-center justify-end gap-3">
+              <div className="flex flex-wrap items-center justify-end gap-3"></div>
 
-              </div>
               <div className="flex flex-wrap items-center justify-end gap-3">
                 <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-white/70 px-3 py-2 text-xs text-slate-800 ring-1 ring-slate-200">
                   <input
@@ -676,11 +701,13 @@ export default function AccountPage() {
 
             {message && <p className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-800">{message}</p>}
 
-            {/* (3) Doppelung vermeiden: Unten keine Themen/Setup-Buttons mehr */}
             {authed && (
               <div className="mt-3 rounded-2xl bg-white/70 p-4 ring-1 ring-slate-200">
                 <div className="text-sm text-slate-700">
                   Angemeldet als: <span className="font-semibold text-slate-900">{authedEmail}</span>
+                </div>
+                <div className="mt-2 text-sm text-slate-700">
+                  Aktueller Plan (Supabase): <span className="font-semibold text-slate-900">{currentUserPlan ?? 'noch nicht gesetzt'}</span>
                 </div>
                 <div className="mt-2 text-xs text-slate-600">
                   Themen und Setup findest du oben rechts.
