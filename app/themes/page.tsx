@@ -174,7 +174,7 @@ export default function ThemesPage() {
   }, []);
 
   const [mode, setMode] = useState<Mode>('manual');
-  const [weeksCount, setWeeksCount] = useState<number>(4);
+  const [weeksCount, setWeeksCount] = useState<number>(1);
   const [startMonday, setStartMonday] = useState<string>(nextMondayISO());
 
   // iCal-Vorliebe + Datumsbasis in SETUP_KEY speichern

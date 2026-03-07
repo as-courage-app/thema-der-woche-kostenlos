@@ -309,7 +309,7 @@ export default function AccountPage() {
         return;
       }
 
-      setMessage('Erfolgreich angemeldet.');
+      setMessage(null);
       // Buttons oben rechts werden automatisch aktiv über authedEmail
     } finally {
       setLoading(false);
@@ -431,7 +431,7 @@ export default function AccountPage() {
               ].join(' ')}
               title={navAuthed ? undefined : 'Bitte erst anmelden'}
             >
-              Themen
+              Themenauswahl
             </Link>
 
             <Link
@@ -594,7 +594,7 @@ export default function AccountPage() {
                     href="/themes"
                     className="cursor-pointer rounded-xl bg-white/90 px-3 py-2 text-sm font-semibold text-slate-900 shadow-md ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-xl hover:ring-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
                   >
-                    Themen
+                    Themenauswahl
                   </Link>
                 ) : (
                   <span
@@ -602,7 +602,7 @@ export default function AccountPage() {
                     aria-disabled="true"
                     title="Bitte erst anmelden"
                   >
-                    Themen
+                    Themenauswahl
                   </span>
                 )}
 
@@ -655,7 +655,11 @@ export default function AccountPage() {
                 disabled={loading || !consentOk}
                 className="mt-1 inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? 'Bitte warten…' : 'Anmelden'}
+                {loading
+                  ? 'Bitte warten…'
+                  : authedEmail
+                    ? 'Erfolgreich angemeldet - du kannst jetzt über die Themenauswahl deine Themen wählen'
+                    : 'Anmelden'}
               </button>
 
               {!consentOk && (
@@ -676,7 +680,7 @@ export default function AccountPage() {
                   Aktueller Plan (Supabase): <span className="font-semibold text-slate-900">{currentUserPlan ?? 'noch nicht gesetzt'}</span>
                 </div>
                 <div className="mt-2 text-xs text-slate-600">
-                  Themen und Setup findest du oben rechts.
+                  Themenauswahl findest du oben rechts.
                 </div>
               </div>
             )}
