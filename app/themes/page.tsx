@@ -176,9 +176,11 @@ export default function ThemesPage() {
   const [mode, setMode] = useState<Mode>('manual');
   const [weeksCount, setWeeksCount] = useState<number>(1);
   const [startMonday, setStartMonday] = useState<string>(nextMondayISO());
+  const [setupLoaded, setSetupLoaded] = useState(false);
 
   // iCal-Vorliebe + Datumsbasis in SETUP_KEY speichern
   useEffect(() => {
+    if (!setupLoaded) return;
     try {
       const raw = localStorage.getItem(SETUP_KEY);
       const prev = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
@@ -260,6 +262,7 @@ export default function ThemesPage() {
     const selArr = normalizeStringArray(selRaw);
     setSelectedThemes(selArr.slice(0, Math.min(selArr.length, upperWeeks)));
     setSelectionLoaded(true);
+    setSetupLoaded(true);
   }, [upperWeeks]);
 
   // selection persistieren
