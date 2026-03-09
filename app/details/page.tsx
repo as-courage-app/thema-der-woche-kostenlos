@@ -22,7 +22,7 @@ export default async function InfografikPage({ searchParams }: InfografikPagePro
     '06': 'erfolg',
     '07': 'feedback',
     '08': 'fehlerkultur',
-    '09': 'flexibilitaet',
+    '09': 'flexibilitaet-1',
     '10': 'fluktuation',
     '11': 'fuehrung-1',
     '12': 'gerechtigkeit',
