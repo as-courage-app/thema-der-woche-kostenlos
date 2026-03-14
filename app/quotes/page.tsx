@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { readCurrentUserPlan } from '@/lib/userPlan';
 import BackgroundLayout from '../../components/BackgroundLayout';
+import DetailsMenu from './DetailsMenu';
 import edition1 from '../data/edition1.json';
 import Link from 'next/link';
 import PodcastMiniPlayer from '../../components/PodcastMiniPlayer';
@@ -322,7 +323,7 @@ export default function QuotesPage() {
   const licenseTier: LicenseTier | undefined = setup?.selectedLicenseTier ?? setup?.licenseTier;
   const podcastAllowed = licenseTier === 'C';
   const podcastReady =
-    !!currentEpisode && currentThemeNumber !== null && currentThemeNumber <= 20;
+    !!currentEpisode && currentThemeNumber !== null;
 
   const weekMondayDate = useMemo(() => {
     const base = parseIsoDate(setup?.startMonday);
@@ -500,13 +501,7 @@ export default function QuotesPage() {
                   <span aria-hidden="true" className="text-base leading-none">🖼️</span> Infografik
                 </Link>
 
-                <Link
-                  href={current?.id ? `/details?themeId=${encodeURIComponent(current.id)}` : '/details'}
-                  className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition-all hover:bg-slate-100 hover:border-slate-400 hover:shadow-md cursor-pointer"
-                  title="Details öffnen"
-                >
-                  <span aria-hidden="true" className="text-base leading-none">❗</span> Details
-                </Link>
+                <DetailsMenu themeId={current?.id} />
 
                 <Link
                   href={current?.id ? `/notizen?themeId=${encodeURIComponent(current.id)}` : '/notizen'}
