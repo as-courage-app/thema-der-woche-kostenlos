@@ -1,18 +1,64 @@
 import Link from 'next/link';
-import BackgroundLayout from '@/components/BackgroundLayout';
 import DetailsViewer from './DetailsViewer';
 
-type InfografikPageProps = {
+type DetailsPageProps = {
   searchParams: Promise<{
     themeId?: string;
+    view?: string;
   }>;
 };
 
-export default async function InfografikPage({ searchParams }: InfografikPageProps) {
+export default async function DetailsPage({ searchParams }: DetailsPageProps) {
   const params = await searchParams;
   const rawThemeId = params?.themeId ?? '';
+  const requestedView = params?.view === 'lang' ? 'lang' : 'kurz';
 
   const themeNumber = (rawThemeId.split('-')[1] ?? '1').padStart(2, '0');
+
+  const themeTitleMap: Record<string, string> = {
+    '01': 'Anerkennung',
+    '02': 'Belastung',
+    '03': 'Diskriminierung',
+    '04': 'Ehrlichkeit',
+    '05': 'Entscheidungsfindung',
+    '06': 'Erfolg',
+    '07': 'Feedback',
+    '08': 'Fehlerkultur',
+    '09': 'Flexibilität',
+    '10': 'Fluktuation',
+    '11': 'Führung',
+    '12': 'Gerechtigkeit',
+    '13': 'Gleichberechtigung',
+    '14': 'Grenzen',
+    '15': 'Humor',
+    '16': 'Kennzahlen',
+    '17': 'Klarheit',
+    '18': 'Kommunikation',
+    '19': 'Konflikte',
+    '20': 'Kreativität',
+    '21': 'Kritik',
+    '22': 'Lernen',
+    '23': 'Macht',
+    '24': 'Mitarbeitendengespräche',
+    '25': 'Motivation',
+    '26': 'Nachhaltigkeit',
+    '27': 'Pausen',
+    '28': 'Prioritäten',
+    '29': 'Qualität',
+    '30': 'Regeln',
+    '31': 'Selbstführung',
+    '32': 'Selbstwirksamkeit',
+    '33': 'Sinn',
+    '34': 'Stress',
+    '35': 'Transparenz',
+    '36': 'Veränderung',
+    '37': 'Verantwortung',
+    '38': 'Verbesserung',
+    '39': 'Vision',
+    '40': 'Wertschätzung',
+    '41': 'Zusammenarbeit',
+  };
+
   const themeSlugMap: Record<string, string> = {
     '01': 'anerkennung-1',
     '02': 'belastung',
@@ -26,73 +72,60 @@ export default async function InfografikPage({ searchParams }: InfografikPagePro
     '10': 'fluktuation',
     '11': 'fuehrung-1',
     '12': 'gerechtigkeit',
-    '13': 'thema-13',
-    '14': 'thema-14',
-    '15': 'thema-15',
-    '16': 'thema-16',
-    '17': 'thema-17',
-    '18': 'thema-18',
-    '19': 'thema-19',
-    '20': 'thema-20',
-    '21': 'thema-21',
-    '22': 'thema-22',
-    '23': 'thema-23',
-    '24': 'thema-24',
-    '25': 'thema-25',
-    '26': 'thema-26',
-    '27': 'thema-27',
-    '28': 'thema-28',
-    '29': 'thema-29',
-    '30': 'thema-30',
-    '31': 'thema-31',
-    '32': 'thema-32',
-    '33': 'thema-33',
-    '34': 'thema-34',
-    '35': 'thema-35',
-    '36': 'thema-36',
-    '37': 'thema-37',
-    '38': 'thema-38',
-    '39': 'thema-39',
-    '40': 'thema-40',
-    '41': 'thema-41',
+    '13': 'gleichberechtigung',
+    '14': 'grenzen',
+    '15': 'humor',
+    '16': 'kennzahlen-1',
+    '17': 'klarheit',
+    '18': 'kommunikation-1',
+    '19': 'konflikte-1',
+    '20': 'kreativitaet',
+    '21': 'kritik-1',
+    '22': 'lernen-1',
+    '23': 'macht-1',
+    '24': 'ma-gespraeche-1',
+    '25': 'motivation',
+    '26': 'nachhaltigkeit',
+    '27': 'pausen',
+    '28': 'proritaeten',
+    '29': 'qualitaet',
+    '30': 'regeln-1',
+    '31': 'selbstfuehrung',
+    '32': 'selbstwirksamkleit',
+    '33': 'sinn',
+    '34': 'stress-1',
+    '35': 'transparenz',
+    '36': 'veraenderung',
+    '37': 'verantwortung',
+    '38': 'verbesserung',
+    '39': 'vision',
+    '40': 'wertschaetzung-1',
+    '41': 'zusammenarbeit',
   };
 
+  const themeTitle = themeTitleMap[themeNumber] ?? 'unbekannt';
   const themeSlug = themeSlugMap[themeNumber] ?? `thema-${themeNumber}`;
+
   const standardSrc = `/details/thema-${themeNumber}-${themeSlug}-kurz.pdf`;
   const detailSrc = `/details/thema-${themeNumber}-${themeSlug}-lang.pdf`;
-
-  const availableStandardThemes = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10'];
-  const availableDetailThemes = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10'];
 
   const backHref = rawThemeId
     ? `/quotes?themeId=${encodeURIComponent(rawThemeId)}`
     : '/quotes';
 
   return (
-    <BackgroundLayout>
+    <>
       <main className="mx-auto max-w-none px-4 py-8">
 
-        <div className="mt-6 flex items-center justify-between rounded-2xl bg-white/90 px-4 py-3 shadow-sm">
-          <div className="flex items-center gap-2">
-            <Link
-              href={backHref}
-              className="inline-flex min-h-[44px] items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition-all hover:bg-slate-100 hover:border-slate-400 hover:shadow-md cursor-pointer"
-            >
-              zurück
-            </Link>
-          </div>
-
-          <h1 className="ml-4 text-2xl font-bold">
-            Details – {rawThemeId || 'unbekannt'}
-          </h1>
-        </div>
 
         <DetailsViewer
           standardSrc={standardSrc}
           detailSrc={detailSrc}
           themeNumber={themeNumber}
+          initialView={requestedView}
+          backHref={backHref}
         />
       </main>
-    </BackgroundLayout>
+    </>
   );
 }

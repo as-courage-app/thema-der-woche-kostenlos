@@ -1,85 +1,40 @@
-'use client';
-
-import { useState } from 'react';
+import Link from 'next/link';
 
 type DetailsViewerProps = {
   standardSrc: string;
   detailSrc: string;
   themeNumber: string;
+  initialView: 'kurz' | 'lang';
+  backHref: string;
 };
 
 export default function DetailsViewer({
   standardSrc,
   detailSrc,
   themeNumber,
+  initialView,
+  backHref,
 }: DetailsViewerProps) {
-  const [activeView, setActiveView] = useState<'none' | 'kurz' | 'lang'>('none');
-
-  if (activeView === 'kurz') {
-    return (
-      <section className="mt-8">
-        <div className="mb-3 flex items-center gap-2">
-          <div className="inline-block rounded-xl bg-white px-3 py-1 shadow-sm">
-            <h2 className="text-lg font-semibold">Kurzversion</h2>
-          </div>
-
-        </div>
-
-        <iframe
-          src={standardSrc}
-          title={`Kurzversion Thema ${themeNumber}`}
-          className="h-[900px] w-[calc(100vw-2rem)] max-w-none rounded-2xl border border-slate-200 bg-white shadow-sm"
-        />
-      </section>
-    );
-  }
-
-  if (activeView === 'lang') {
-    return (
-      <section className="mt-8">
-        <div className="mb-3 flex items-center gap-2">
-          <div className="inline-block rounded-xl bg-white px-3 py-1 shadow-sm">
-            <h2 className="text-lg font-semibold">Langversion</h2>
-          </div>
-
-        </div>
-
-        <iframe
-          src={detailSrc}
-          title={`Langversion Thema ${themeNumber}`}
-          className="h-[900px] w-[calc(100vw-2rem)] max-w-none rounded-2xl border border-slate-200 bg-white shadow-sm"
-        />
-      </section>
-    );
-  }
+  const src = initialView === 'lang' ? detailSrc : standardSrc;
 
   return (
-    <section className="mt-8 grid gap-4 md:grid-cols-2">
-      <button
-        type="button"
-        onClick={() => setActiveView('kurz')}
-        className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm hover:bg-slate-100 hover:border-slate-400 hover:shadow-md transition-all"
-      >
-        <div className="inline-block rounded-xl bg-white px-3 py-1 shadow-sm">
-          <h2 className="text-lg font-semibold">Kurzversion</h2>
+    <section className="mt-0">
+      <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-sm">
+        <div className="flex min-h-[44px] items-center justify-start border-b border-slate-700 bg-slate-900 px-3 py-2">
+          <Link
+            href={backHref}
+            className="inline-flex min-h-[36px] items-center rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-slate-700 hover:border-slate-500 cursor-pointer"
+          >
+            zurück
+          </Link>
         </div>
-        <p className="mt-3 text-sm text-slate-600">
-          Anklicken zum Öffnen
-        </p>
-      </button>
 
-      <button
-        type="button"
-        onClick={() => setActiveView('lang')}
-        className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm hover:bg-slate-100 hover:border-slate-400 hover:shadow-md transition-all"
-      >
-        <div className="inline-block rounded-xl bg-white px-3 py-1 shadow-sm">
-          <h2 className="text-lg font-semibold">Langversion</h2>
-        </div>
-        <p className="mt-3 text-sm text-slate-600">
-          Anklicken zum Öffnen
-        </p>
-      </button>
+        <iframe
+          src={src}
+          title={`Thema ${themeNumber}`}
+          className="block h-[calc(100vh-7rem)] w-full border-0 bg-white"
+        />
+      </div>
     </section>
   );
-} 
+}
