@@ -175,17 +175,17 @@ export default function VersionPage() {
                 <div className="font-semibold text-slate-900">Funktionsumfang (Vollversion):</div>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
                   <li>Alle Inhalte: 41 Wochen-Themen, Bilder, Zitate und 205 Tagesimpulse</li>
-                  <li>41 Podcastfolgen</li>
-                  <li>41 Wochenthemen</li>
-                  <li>41 Videos</li>
-                  <li>41 Details (Infografiken)</li>
-                  <li>41 Details (Kurz- und Langinfos)</li>
+                  <li>41 Podcastfolgen je nach Variante</li>
+                  <li>41 Videos je nach Variante</li>
+                  <li>41 Details/Infografiken je nach Variante</li>
+                  <li>41 Details/Kurz- und Langinfos je nach Variante</li>
                   <li>Freie Themenwahl manuell oder per Zufall</li>
                   <li>Reihenfolge aller Themen veränderbar</li>
                   <li>Startdatum festlegbar (Wochenstart jeweils am Montag)</li>
-                  <li>Kennzeichnung genutzter Themen (wiederverwendbar)</li>
-                  <li>Team-/Kalenderfunktionen (iCal) je nach Lizenz</li>
-                  <li>Notizfunktion mit Druckausgabe</li>
+                  <li>Kennzeichnung genutzter Themen</li>
+                  <li>gekennzeichnet Themen wiederverwendbar</li>
+                  <li>Team-Kalender (iCal) je nach Variante</li>
+                  <li>Notizfunktion mit Druckausgabe je nach Variante</li>
                 </ul>
               </div>
             </button>
