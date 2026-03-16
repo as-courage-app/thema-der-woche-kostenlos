@@ -10,6 +10,7 @@ import Link from 'next/link';
 import PodcastMiniPlayer from '../../components/PodcastMiniPlayer';
 import { podcastEpisodes } from '../../lib/podcastEpisodes';
 import RequireAuth from '@/components/RequireAuth';
+import { getAppMode } from '@/lib/appMode';
 
 const LS_SETUP = 'as-courage.themeSetup.v1';
 
@@ -248,6 +249,9 @@ export default function QuotesPage() {
   const [currentUserPlan, setCurrentUserPlan] = useState<'A' | 'B' | 'C' | null>(null);
   const [activeDay, setActiveDay] = useState<Record<string, number>>({});
   const [pageIndex, setPageIndex] = useState<number>(0);
+  const [appMode, setAppMode] = useState<'free' | 'full' | null>(null);
+  const isFree = appMode === 'free';
+  const AuthWrapper = appMode === 'full' ? RequireAuth : React.Fragment;
 
   // Fallback: wenn themes/<id>.jpg fehlt -> demo.jpg
   const [imgFallbackToDemo, setImgFallbackToDemo] = useState<boolean>(false);
@@ -259,10 +263,12 @@ export default function QuotesPage() {
       const themeIdFromUrl = new URLSearchParams(window.location.search).get('themeId');
       const s = readSetup();
       const plan = await readCurrentUserPlan();
+      const mode = getAppMode();
 
       if (!alive) return;
 
       setSetup(s);
+      setAppMode(mode);
       setCurrentUserPlan(plan);
 
       console.log('TDW setup:', s);
@@ -378,7 +384,7 @@ export default function QuotesPage() {
   }, [currentUserPlan, setup]);
 
   return (
-    <RequireAuth>
+    <AuthWrapper>
       <BackgroundLayout activeThemeId={current?.id}>
         <div className="mx-auto flex h-full min-h-[100svh] lg:min-h-0 max-w-6xl px-10 py-3">
           <div className="w-full max-h-none lg:max-h-[calc(100vh-10rem)] rounded-none sm:rounded-2xl bg-white/98 sm:bg-white/85 shadow-none sm:shadow-xl backdrop-blur-md min-h-[100dvh] sm:min-h-0 overflow-visible lg:overflow-hidden flex flex-col">
@@ -494,11 +500,11 @@ export default function QuotesPage() {
                 </button>
 
                 <Link
-                  href={current?.id ? `/infografik?themeId=${encodeURIComponent(current.id)}` : '/infografik'}
+                  href={current?.id ? `/video?themeId=${encodeURIComponent(current.id)}` : '/video'}
                   className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition-all hover:bg-slate-100 hover:border-slate-400 hover:shadow-md cursor-pointer"
-                  title="Infografik öffnen"
+                  title="Video öffnen"
                 >
-                  <span aria-hidden="true" className="text-base leading-none">🖼️</span> Infografik
+                  <span aria-hidden="true" className="text-base leading-none">🎬</span> Video
                 </Link>
 
                 <DetailsMenu themeId={current?.id} />
@@ -633,6 +639,6 @@ export default function QuotesPage() {
           </div>
         </div>
       </BackgroundLayout>
-    </RequireAuth>
+    </AuthWrapper>
   );
 }

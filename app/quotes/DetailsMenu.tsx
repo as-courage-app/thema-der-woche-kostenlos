@@ -48,12 +48,16 @@ export default function DetailsMenu({ themeId }: DetailsMenuProps) {
     ? `/details?themeId=${encodeURIComponent(themeId)}&view=lang`
     : '/details?view=lang';
 
+  const infografikHref = themeId
+    ? `/infografik?themeId=${encodeURIComponent(themeId)}`
+    : '/infografik';
+
   return (
     <div ref={rootRef} className="relative">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition-all hover:bg-slate-100 hover:border-slate-400 hover:shadow-md cursor-pointer"
+        className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition-all hover:border-slate-400 hover:bg-slate-100 hover:shadow-md cursor-pointer"
         title="Details öffnen"
       >
         <span aria-hidden="true" className="text-base leading-none">❗</span>
@@ -76,6 +80,14 @@ export default function DetailsMenu({ themeId }: DetailsMenuProps) {
             onClick={() => setOpen(false)}
           >
             Langversion
+          </Link>
+
+          <Link
+            href={infografikHref}
+            className="mt-1 block rounded-lg px-3 py-2 text-sm text-slate-900 hover:bg-slate-100 cursor-pointer"
+            onClick={() => setOpen(false)}
+          >
+            Infografik
           </Link>
         </div>
       ) : null}

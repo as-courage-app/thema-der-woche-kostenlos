@@ -137,8 +137,11 @@ export default function VersionPage() {
                 <ul className="mt-1 list-disc pl-5">
                   <li>alle 41 Wochenthemen sichtbar</li>
                   <li>4 von 41 Wochenthemen zur Auswahl</li>
-                  <li>4 von 41 Zitaten und Bildern sichtbar</li>
-                  <li>4 von 41 Podcastfolgen hörbar</li>
+                  <li>4 von 41 Zitaten und Bildern</li>
+                  <li>4 von 41 Podcastfolgen</li>
+                  <li>4 von 41 Videos</li>
+                  <li>4 von 41 Details (Infografiken)</li>
+                  <li>4 von 41 Details (Kurz- und Langinfos)</li>
                   <li>max. 2 Themen gleichzeitig auswählbar</li>
                   <li>Reihenfolge der Themen veränderbar</li>
                   <li>Kennzeichnung der genutzten Themen</li>
@@ -172,12 +175,15 @@ export default function VersionPage() {
                 <div className="font-semibold text-slate-900">Funktionsumfang (Vollversion):</div>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
                   <li>Alle Inhalte: 41 Wochen-Themen, Bilder, Zitate und 205 Tagesimpulse</li>
-                  <li>41 Podcastfolgen hörbar</li>
+                  <li>41 Podcastfolgen</li>
+                  <li>41 Wochenthemen</li>
+                  <li>41 Videos</li>
+                  <li>41 Details (Infografiken)</li>
+                  <li>41 Details (Kurz- und Langinfos)</li>
                   <li>Freie Themenwahl manuell oder per Zufall</li>
                   <li>Reihenfolge aller Themen veränderbar</li>
                   <li>Startdatum festlegbar (Wochenstart jeweils am Montag)</li>
-                  <li>Bereits genutzte Wochen-Themen werden gekennzeichnet</li>
-                  <li>Gekennzeichnete Themen sind wiederverwendbar</li>
+                  <li>Kennzeichnung genutzter Themen (wiederverwendbar)</li>
                   <li>Team-/Kalenderfunktionen (iCal) je nach Lizenz</li>
                   <li>Notizfunktion mit Druckausgabe</li>
                 </ul>

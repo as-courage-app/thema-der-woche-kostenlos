@@ -168,6 +168,7 @@ export default function ThemesPage() {
 
   const isFree = appMode === 'free';
   const upperWeeks = isFree ? FREE_WEEKS_COUNT : 41;
+  const AuthWrapper = isFree ? React.Fragment : RequireAuth;
 
   const sortedThemes = useMemo(() => {
     return [...THEMES].sort((x, y) => sortDE(displayTitle(x), displayTitle(y)));
@@ -363,7 +364,7 @@ export default function ThemesPage() {
   }, [selectedThemes, sortedThemes]);
 
   return (
-    <RequireAuth>
+    <AuthWrapper>
       <BackgroundLayout>
         <div className="mx-auto flex min-h-[100svh] max-w-6xl px-3 py-2 sm:px-10 sm:py-3">
           <div className="w-full rounded-2xl bg-white/85 shadow-xl backdrop-blur-md flex flex-col">
@@ -709,7 +710,7 @@ export default function ThemesPage() {
           </div>
         </div>
       </BackgroundLayout>
-    </RequireAuth>
+    </AuthWrapper>
   );
 }
 

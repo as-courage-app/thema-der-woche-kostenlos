@@ -99,7 +99,7 @@ export default function StartPage() {
               {canUseThemesSetup ? (
                 <>
                   <Link href="/themes" className={topBtnEnabled} title="Zur Themenübersicht">
-                    Themen
+                    Themenauswahl
                   </Link>
                   <Link href="/setup" className={topBtnEnabled} title="Setup starten">
                     Setup
@@ -108,7 +108,7 @@ export default function StartPage() {
               ) : (
                 <>
                   <span className={topBtnDisabled} aria-disabled="true" title="Bitte erst anmelden">
-                    Themen
+                    Themenauswahl
                   </span>
                   <span className={topBtnDisabled} aria-disabled="true" title="Bitte erst anmelden">
                     Setup
