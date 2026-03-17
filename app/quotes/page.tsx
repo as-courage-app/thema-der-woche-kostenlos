@@ -11,6 +11,7 @@ import PodcastMiniPlayer from '../../components/PodcastMiniPlayer';
 import { podcastEpisodes } from '../../lib/podcastEpisodes';
 import RequireAuth from '@/components/RequireAuth';
 import { getAppMode } from '@/lib/appMode';
+import MediathekMenu from './MediathekMenu';
 
 const LS_SETUP = 'as-courage.themeSetup.v1';
 
@@ -482,10 +483,11 @@ export default function QuotesPage() {
                 >
                   weiter
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
+                <MediathekMenu
+                  themeId={current?.id}
+                  podcastAllowed={podcastAllowed}
+                  podcastReady={podcastReady}
+                  onPodcastClick={() => {
                     setPodcastNotice(null);
                     if (!podcastAllowed) {
                       setPodcastNotice('Podcast nur in Variante C verfügbar.');
@@ -497,26 +499,10 @@ export default function QuotesPage() {
                     }
                     setShowPodcast((s) => !s);
                   }}
-                  disabled={false}
-                  className={[
-                    'min-h-[44px] rounded-xl px-4 py-2 text-sm font-medium border shadow-sm transition-all',
-                    podcastAllowed && podcastReady
-                      ? 'border-slate-300 bg-white text-slate-900 hover:bg-slate-100 hover:border-slate-400 hover:shadow-md cursor-pointer'
-                      : 'border-slate-200 bg-white text-slate-500 cursor-pointer',
-                  ].join(' ')}
-                >
-                  🎧 Podcast
-                </button>
-
-                <Link
-                  href={current?.id ? `/video?themeId=${encodeURIComponent(current.id)}` : '/video'}
-                  className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition-all hover:bg-slate-100 hover:border-slate-400 hover:shadow-md cursor-pointer"
-                  title="Video öffnen"
-                >
-                  <span aria-hidden="true" className="text-base leading-none">🎬</span> Video
-                </Link>
+                />
 
                 <DetailsMenu themeId={current?.id} />
+
 
                 <Link
                   href={current?.id ? `/notizen?themeId=${encodeURIComponent(current.id)}` : '/notizen'}
