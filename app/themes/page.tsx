@@ -151,6 +151,7 @@ export default function ThemesPage() {
       }
 
       setIsPlanC(planC);
+      setSetupLoaded(true);
     }
 
     loadPlanAndIcalPref();
@@ -188,7 +189,7 @@ export default function ThemesPage() {
 
       const next = {
         ...prev,
-        icalEnabled: isPlanC ? icalPref : false,
+        icalEnabled: icalPref,
         weeksCount,
         startMonday,
       };
@@ -263,7 +264,6 @@ export default function ThemesPage() {
     const selArr = normalizeStringArray(selRaw);
     setSelectedThemes(selArr.slice(0, Math.min(selArr.length, upperWeeks)));
     setSelectionLoaded(true);
-    setSetupLoaded(true);
   }, [upperWeeks]);
 
   // selection persistieren
@@ -373,7 +373,7 @@ export default function ThemesPage() {
               <header>
                 <div className="flex items-start justify-between gap-4">
                   <h1 className="text-2xl font-semibold tracking-tight text-black">
-                    Themenauswahl <span className="text-base font-normal tracking-wide">(Edition 1)</span>
+                    Themenauswahl <span className="text-base font-normal tracking-wide">(Edition 1 - kostenlos)</span>
                   </h1>
 
                   <div className="flex gap-2">
@@ -383,23 +383,17 @@ export default function ThemesPage() {
                         <input
                           type="checkbox"
                           className="h-4 w-4 cursor-pointer"
-                          checked={isPlanC ? icalPref : false}
-                          disabled={!isPlanC}
+                          checked={icalPref}
                           onChange={(e) => setIcalPref(e.target.checked)}
                         />
                         <span>
-                          iCal aktivieren (nur in Variante C möglich)
+                          iCal aktivieren
                           <span className="block text-[11px] text-slate-500">
                             Download später bei „Zitate &amp; Tagesimpulse“
                           </span>
                         </span>
                       </label>
 
-                      {!isPlanC && (
-                        <Link href="/account" className="text-xs font-semibold underline text-slate-700 hover:text-slate-900">
-                          Upgrade auf Variante C
-                        </Link>
-                      )}
                     </div>
 
                   </div>

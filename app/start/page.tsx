@@ -102,7 +102,7 @@ export default function StartPage() {
                     Themenauswahl
                   </Link>
                   <Link href="/setup" className={topBtnEnabled} title="Setup starten">
-                    Setup
+                    zum update
                   </Link>
                 </>
               ) : (
@@ -111,7 +111,7 @@ export default function StartPage() {
                     Themenauswahl
                   </span>
                   <span className={topBtnDisabled} aria-disabled="true" title="Bitte erst anmelden">
-                    Setup
+                    zum update
                   </span>
                 </>
               )}

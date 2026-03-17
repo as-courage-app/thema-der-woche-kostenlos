@@ -327,7 +327,7 @@ export default function QuotesPage() {
   }, [currentThemeNumber]);
 
   const licenseTier: LicenseTier | undefined = setup?.selectedLicenseTier ?? setup?.licenseTier;
-  const podcastAllowed = licenseTier === 'C';
+ const podcastAllowed =  licenseTier === 'C' || (currentThemeNumber !== null && currentThemeNumber <= 4);
   const podcastReady =
     !!currentEpisode && currentThemeNumber !== null;
 
@@ -380,7 +380,7 @@ export default function QuotesPage() {
 
   // ✅ Button nur bei C + iCal-Haken (robust: alter/neuer Feldname)
   const showIcalButton = useMemo(() => {
-    return currentUserPlan === 'C' && Boolean(setup?.icalEnabled);
+    return Boolean(setup?.icalEnabled);
   }, [currentUserPlan, setup]);
 
   return (
@@ -395,7 +395,7 @@ export default function QuotesPage() {
                   <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
                     Zitate &amp; Tagesimpulse{' '}
                     <span className="text-base font-normal tracking-wide text-slate-600">
-                      (Edition 1)
+                      (Edition 1 - kostenlos)
                     </span>
                   </h1>
                 </div>
@@ -409,7 +409,7 @@ export default function QuotesPage() {
                           const ics = buildIcsFromPlan(setup, selectedThemes);
                           downloadTextFile('thema-der-woche.ics', ics, 'text/calendar;charset=utf-8');
                         }}
-                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white hover:opacity-90"
+                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white transition hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-lg"
                         title="iCal-Datei herunterladen"
                       >
                         iCal herunterladen
