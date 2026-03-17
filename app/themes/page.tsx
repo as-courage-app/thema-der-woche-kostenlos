@@ -8,6 +8,7 @@ import { getAppMode, FREE_ALLOWED_THEMES, FREE_WEEKS_COUNT } from '@/lib/appMode
 import RequireAuth from '@/components/RequireAuth';
 import { readCurrentUserPlan } from '@/lib/userPlan';
 
+
 // Datei muss liegen unter: app/data/edition1.json
 import edition1 from '../data/edition1.json';
 function moveItem<T>(arr: T[], from: number, to: number): T[] {
@@ -378,6 +379,13 @@ export default function ThemesPage() {
 
                   <div className="flex gap-2">
                     <div className="flex flex-wrap items-center gap-3">
+                      <Link
+                        href="/account"
+                        className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#F29420] px-4 py-2 text-sm text-slate-900 transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-lg"
+                        title="Zum Upgrade"
+                      >
+                        zum upgrade
+                      </Link>
 
                       <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800">
                         <input
@@ -393,9 +401,7 @@ export default function ThemesPage() {
                           </span>
                         </span>
                       </label>
-
                     </div>
-
                   </div>
                 </div>
 

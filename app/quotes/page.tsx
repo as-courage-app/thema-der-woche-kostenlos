@@ -327,7 +327,7 @@ export default function QuotesPage() {
   }, [currentThemeNumber]);
 
   const licenseTier: LicenseTier | undefined = setup?.selectedLicenseTier ?? setup?.licenseTier;
- const podcastAllowed =  licenseTier === 'C' || (currentThemeNumber !== null && currentThemeNumber <= 4);
+  const podcastAllowed = licenseTier === 'C' || (currentThemeNumber !== null && currentThemeNumber <= 4);
   const podcastReady =
     !!currentEpisode && currentThemeNumber !== null;
 
@@ -415,10 +415,19 @@ export default function QuotesPage() {
                         iCal herunterladen
                       </button>
                     )}
+
+                    <Link
+                      href="/account"
+                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#F29420] px-4 py-2 text-sm text-slate-900 transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-lg"
+                      title="Zum Upgrade"
+                    >
+                      zum upgrade
+                    </Link>
+
                     <button
                       type="button"
                       onClick={() => router.push('/themes')}
-                      className="inline-flex min-h-[44px] items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition-all hover:bg-slate-100 hover:border-slate-400 hover:shadow-md cursor-pointer"
+                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg cursor-pointer"
                     >
                       zurück zur Themenauswahl
                     </button>

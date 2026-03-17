@@ -101,8 +101,12 @@ export default function StartPage() {
                   <Link href="/themes" className={topBtnEnabled} title="Zur Themenübersicht">
                     Themenauswahl
                   </Link>
-                  <Link href="/setup" className={topBtnEnabled} title="Setup starten">
-                    zum update
+                  <Link
+                    href="/account"
+                    className="rounded-xl bg-[#F29420] px-4 py-2 text-sm text-slate-900 shadow-md transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-xl"
+                    title="Zum Update"
+                  >
+                    zum upgrade
                   </Link>
                 </>
               ) : (
@@ -111,7 +115,7 @@ export default function StartPage() {
                     Themenauswahl
                   </span>
                   <span className={topBtnDisabled} aria-disabled="true" title="Bitte erst anmelden">
-                    zum update
+                    zum upgrade
                   </span>
                 </>
               )}
@@ -120,9 +124,8 @@ export default function StartPage() {
 
           {/* Anmeldeblock (wie bisher – in free deaktiviert) */}
           <div
-            className={`mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${
-              mode === 'free' ? 'opacity-60' : ''
-            }`}
+            className={`mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${mode === 'free' ? 'opacity-60' : ''
+              }`}
             aria-disabled={mode === 'free'}
           >
             <div className="flex items-start justify-between gap-3">
