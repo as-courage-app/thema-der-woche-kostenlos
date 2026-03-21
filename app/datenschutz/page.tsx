@@ -12,7 +12,7 @@ export default function DatenschutzPage() {
 
           <div className="mt-6">
             <Link
-              href="/account"
+              href="https://thema-der-woche.vercel.app/account"
               className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-md ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-xl hover:ring-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
             >
               Zurück zur Anmeldung
