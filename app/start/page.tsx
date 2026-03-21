@@ -122,45 +122,52 @@ export default function StartPage() {
             </div>
           </div>
 
-          {/* Anmeldeblock (wie bisher – in free deaktiviert) */}
-          <div
-            className={`mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${mode === 'free' ? 'opacity-60' : ''
-              }`}
-            aria-disabled={mode === 'free'}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-base font-semibold text-slate-900">Anmeldung</div>
-                <div className="mt-1 text-sm text-slate-700">{loginHint}</div>
+          {/* Einleitung kostenlose Version */}
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="text-base font-semibold text-slate-900">Willkommen bei Thema der Woche</div>
+
+                <span className="inline-flex whitespace-nowrap rounded-full bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900">
+                  ohne Anmeldung
+                </span>
               </div>
 
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                {loginTag}
-              </span>
+              <div className="mt-1 text-sm text-slate-700">
+                Diese App unterstützt Sie dabei, wichtige Themen im Alltag bewusst in den Blick zu nehmen –
+                mit kurzen Impulsen, klaren Fragen und Anregungen für gute Gespräche, Reflexion und
+                persönliche Entwicklung.
+              </div>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <input
-                type="email"
-                placeholder="E-Mail"
-                disabled
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
-              />
-              <input
-                type="password"
-                placeholder="Passwort"
-                disabled
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
-              />
-            </div>
+            <div className="mt-4 space-y-3 text-sm text-slate-700">
+              <p>
+                In der kostenlosen Version sind die <span className="font-semibold text-slate-900">ersten vier Themen</span> frei. Sie können sie direkt ausprobieren und die Grundstruktur der App kennenlernen.           
+                Über die <span className="font-semibold text-slate-900">Themenauswahl</span> stellen Sie die 
+                Themen zusammen. Sie können über <span className="font-semibold text-slate-900">Anzahl Wochen</span> gleichzeitig zwei Themen  <span className="font-semibold text-slate-900">manuell</span> oder 
+                per <span className="font-semibold text-slate-900">Zufall</span> auswählen. Die Reihenfolge der Themen kann über Pfeiltasten 
+                frei festgelegt werden.
+              </p>
 
-            <button
-              type="button"
-              disabled
-              className="mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700"
-            >
-              Anmelden
-            </button>
+              <p>
+                Der <span className="font-semibold text-slate-900">Info-Button</span>{' '} oben rechts unter 
+                dem Logo begleitet Sie dauerhaft sichtbar durch die App und erklärt bei Bedarf wichtige Funktionen auf einen Blick.
+                Über den <span className="font-semibold text-slate-900">orangenen Upgrade-Button</span>{' '}
+                gelangen Sie jederzeit bequem zur Anmeldung für die Vollversionen mit erweitertem Umfang.
+              </p>
+
+              <div className="text-sm text-slate-700">
+                So können Sie in Ruhe testen, ob Thema der Woche zu Ihnen, Ihrem Team oder Ihrer Einrichtung
+                passt.
+                <span className="block h-3" aria-hidden="true" />
+                <span className="block text-base font-semibold text-slate-900">
+                  Ich wünsche Ihnen viel Erfolg dabei,
+                </span>
+                <span className="block">
+                  Andreas Sedlag, Kompetenztrainer, Theaterpädagoge und systemischer Coach
+                </span>
+              </div>
+            </div>
           </div>
         </section>
       </main>
