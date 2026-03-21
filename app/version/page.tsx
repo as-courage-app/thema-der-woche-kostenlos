@@ -148,7 +148,8 @@ export default function VersionPage() {
                   <li>Details mit 4 Infografiken + Vertiefungen</li>
                   <li>Team-/Kalenderfunktionen (iCal)</li>
                   <li>Notizfunktion mit Druckausgabe</li><br />
-                  <div className="text-base font-semibold text-slate-700">frei zum dauerhaften testen</div><br />
+                  <div className="text-base font-semibold text-slate-700">frei zum dauerhaften Testen<br />
+                    (keine Anmeldung erforderlich)</div><br />
                   <div className="text-base font-semibold text-slate-900">ein Upgrade zur Vollversion ist jederzeit möglich</div>
                   <li className="invisible" aria-hidden="true">Platzhalter</li>
                   <li className="invisible" aria-hidden="true">Platzhalter</li>
