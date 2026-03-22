@@ -96,6 +96,13 @@ export default function StartPage() {
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-2">
+              <Link
+                href="/version"
+                className="cursor-pointer rounded-xl bg-white/90 px-3 py-2 text-sm font-semibold text-slate-900 shadow-md ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-xl hover:ring-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
+              >
+                zurück
+              </Link>
+
               {canUseThemesSetup ? (
                 <>
                   <Link href="/themes" className={topBtnEnabled} title="Zur Themenübersicht">
@@ -142,15 +149,15 @@ export default function StartPage() {
 
             <div className="mt-4 space-y-3 text-sm text-slate-700">
               <p>
-                In der kostenlosen Version sind die <span className="font-semibold text-slate-900">ersten vier Themen</span> frei. Sie können sie direkt ausprobieren und die Grundstruktur der App kennenlernen.           
-                Über die <span className="font-semibold text-slate-900">Themenauswahl</span> stellen Sie die 
-                Themen zusammen. Sie können über <span className="font-semibold text-slate-900">Anzahl Wochen</span> gleichzeitig zwei Themen  <span className="font-semibold text-slate-900">manuell</span> oder 
-                per <span className="font-semibold text-slate-900">Zufall</span> auswählen. Die Reihenfolge der Themen kann über Pfeiltasten 
+                In der kostenlosen Version sind die <span className="font-semibold text-slate-900">ersten vier Themen</span> frei. Sie können sie direkt ausprobieren und die Grundstruktur der App kennenlernen.
+                Über die <span className="font-semibold text-slate-900">Themenauswahl</span> stellen Sie die
+                Themen zusammen. Sie können über <span className="font-semibold text-slate-900">Anzahl Wochen</span> gleichzeitig zwei Themen  <span className="font-semibold text-slate-900">manuell</span> oder
+                per <span className="font-semibold text-slate-900">Zufall</span> auswählen. Die Reihenfolge der Themen kann über Pfeiltasten
                 frei festgelegt werden.
               </p>
 
               <p>
-                Der <span className="font-semibold text-slate-900">Info-Button</span>{' '} oben rechts unter 
+                Der <span className="font-semibold text-slate-900">Info-Button</span>{' '} oben rechts unter
                 dem Logo begleitet Sie dauerhaft sichtbar durch die App und erklärt bei Bedarf wichtige Funktionen auf einen Blick.
                 Über den <span className="font-semibold text-slate-900">orangenen Upgrade-Button</span>{' '}
                 gelangen Sie jederzeit bequem zur Anmeldung für die Vollversionen mit erweitertem Umfang.
