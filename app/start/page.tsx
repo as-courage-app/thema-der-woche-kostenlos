@@ -170,9 +170,11 @@ export default function StartPage() {
                 <span className="block text-base font-semibold text-slate-900">
                   Ich wünsche Ihnen viel Erfolg dabei,
                 </span>
-                <span className="block">
-                  Andreas Sedlag, Kompetenztrainer, Theaterpädagoge und systemischer Coach
-                </span>
+                <img
+                  src="/images/AndreasSedlag.png"
+                  alt="Unterschrift von Andreas Sedlag"
+                  className="block h-16 w-auto"
+                />
               </div>
             </div>
           </div>
