@@ -175,6 +175,9 @@ export default function StartPage() {
                   alt="Unterschrift von Andreas Sedlag"
                   className="block h-16 w-auto"
                 />
+                <span className="mt-1 block">
+                  Kompetenztrainer, Theaterpädagoge und systemischer Coach
+                </span>
               </div>
             </div>
           </div>
