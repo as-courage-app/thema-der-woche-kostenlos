@@ -423,10 +423,8 @@ function NotizenContent() {
 
 export default function NotizenPage() {
   return (
-    <RequireAuth>
-      <Suspense fallback={null}>
-        <NotizenContent />
-      </Suspense>
-    </RequireAuth>
+    <Suspense fallback={null}>
+      <NotizenContent />
+    </Suspense>
   );
 }
