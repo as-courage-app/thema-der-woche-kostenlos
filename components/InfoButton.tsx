@@ -513,20 +513,25 @@ const RAW_INFO_ITEMS: InfoItem[] = [
         <span className="inline-flex items-center rounded-lg bg-slate-900 px-3 py-1 text-sm font-semibold text-white">
           Weiter
         </span>
-        <p className="mt-1">
-          Mit dem Weiter-Button auf der Seite <span className="font-semibold text-slate-900">Themenauswahl</span>{' '} 
-          springst du auf die Seite <span className="font-semibold text-slate-900"> Zitate & Tagesimpulse</span>{' '}. <br />
+
+        <div className="mt-1">
+          <p>
+            Mit dem Weiter-Button auf der Seite <span className="font-semibold text-slate-900">Themenauswahl</span>{' '}
+            springst du auf die Seite <span className="font-semibold text-slate-900">Zitate &amp; Tagesimpulse</span>.
+          </p>
+
           <br />
-          <span className="inline-flex items-center rounded-lg bg-white px-3 py-1 text-sm font-semibold text-slate-900 border border-slate-300">
+
+          <span className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm font-semibold text-slate-900">
             Weiter
           </span>
-          <p className="mt-1"></p>
-          Mit dem Weiter-Button auf der Seite "Zitate &amp; Tagesimpulse" springst du ein Thema weiter.<br />
 
-        </p>
-        <div className="mt-2">
-
+          <p className="mt-1">
+            Mit dem Weiter-Button auf der Seite „Zitate &amp; Tagesimpulse“ springst du ein Thema weiter.
+          </p>
         </div>
+
+        <div className="mt-2"></div>
       </>
     ),
   },
