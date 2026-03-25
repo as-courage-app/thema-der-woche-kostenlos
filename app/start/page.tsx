@@ -164,19 +164,19 @@ export default function StartPage() {
               </p>
 
               <div className="text-sm text-slate-700">
-                So können Sie in Ruhe testen, ob Thema der Woche zu Ihnen, Ihrem Team oder Ihrer Einrichtung
+                So können Sie in Ruhe testen, ob <span className="font-semibold text-slate-900">Thema der Woche</span>{' '}zu Ihnen, Ihrem Team oder Ihrer Einrichtung
                 passt.
                 <span className="block h-3" aria-hidden="true" />
                 <span className="block text-base font-semibold text-slate-900">
                   Ich wünsche Ihnen viel Erfolg dabei,
                 </span>
                 <img
-                  src="/images/AndreasSedlag.png"
+                  src="/images/Unterschrift-as-transparent.png"
                   alt="Unterschrift von Andreas Sedlag"
                   className="block h-16 w-auto"
                 />
                 <span className="mt-1 block">
-                  Kompetenztrainer, Theaterpädagoge und systemischer Coach
+                  Andreas Sedlag, Kompetenztrainer, Theaterpädagoge und systemischer Coach
                 </span>
               </div>
             </div>
