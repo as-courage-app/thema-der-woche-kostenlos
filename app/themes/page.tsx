@@ -444,12 +444,6 @@ export default function ThemesPage() {
                   </div>
                 </div>
 
-                <p className="mt-2 text-sm text-black">
-                  Wähle genau{' '}
-                  <span className="font-semibold text-slate-900">{weeksCount}</span>{' '}
-                  Thema/Themen aus. Bereits genutzte Themen bleiben auswählbar – sie sind nur markiert.
-                </p>
-
               </header>
             </div>
 
@@ -497,7 +491,7 @@ export default function ThemesPage() {
 
                 {/* Anzahl Wochen */}
                 <div className="rounded-xl border border-slate-200 bg-white p-3 text-black sm:text-slate-800">
-                  <label className="block text-sm font-medium text-slate-800">Anzahl Wochen</label>
+                  <label className="block text-sm font-medium text-slate-800">Anzahl Wochen (1 oder 2 in kostenlos)</label>
 
                   <div className="mt-2 flex items-center gap-2">
                     <button
@@ -648,7 +642,14 @@ export default function ThemesPage() {
               {/* Themenliste */}
               <div className="mt-4">
                 <div className="mb-2 flex items-center justify-between">
-                  <div className="text-sm font-medium text-slate-800">Themen (alphabetisch)</div>
+                  <div className="text-sm font-medium text-slate-800">Themen (alphabetisch) max. 4 Themen sind in der kostenlosen Version freigeschaltet <br />
+                    Bereits genutzte Themen bleiben auswählbar – sie sind nur markiert.<br />
+                    <p className="mt-2 text-sm text-black">
+                  Wähle genau{' '}
+                  <span className="font-semibold text-slate-900">{weeksCount}</span>{' '}
+                  Thema/Themen aus.
+                </p>
+                    </div>
                   <div className="text-xs text-slate-600">
                     {mode === 'manual'
                       ? canSelectMore
@@ -727,7 +728,7 @@ export default function ThemesPage() {
                             </div>
                           </button>
                         </li>
-                      );                     
+                      );
                     })}
                   </ul>
                 </div>
