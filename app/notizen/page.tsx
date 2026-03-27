@@ -1,15 +1,35 @@
 'use client';
 
 import Link from 'next/link';
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import BackgroundLayout from '@/components/BackgroundLayout';
-import RequireAuth from '@/components/RequireAuth';
 import edition1 from '@/app/data/edition1.json';
 import { useSearchParams } from 'next/navigation';
 
 type DayKey = 'Mo' | 'Di' | 'Mi' | 'Do' | 'Fr';
 
-const DEFAULT_QUESTIONS: Record<DayKey, string> = {
+type ThemeQuestions = Record<DayKey, string>;
+
+type EditionRow = {
+  id: string;
+  title?: string;
+  quote?: string;
+  questions?: string[] | Partial<Record<DayKey, string>>;
+};
+
+type NotesRun = {
+  runId: string;
+  weekStartIso: string;
+  weekEndIso: string;
+  notes: string;
+  createdAt: string;
+  updatedAt?: string;
+  importedLegacy?: boolean;
+};
+
+const DAY_KEYS: DayKey[] = ['Mo', 'Di', 'Mi', 'Do', 'Fr'];
+
+const DEFAULT_QUESTIONS: ThemeQuestions = {
   Mo: 'Frage 1 folgt…',
   Di: 'Frage 2 folgt…',
   Mi: 'Frage 3 folgt…',
@@ -17,198 +37,344 @@ const DEFAULT_QUESTIONS: Record<DayKey, string> = {
   Fr: 'Frage 5 folgt…',
 };
 
-function pad2(n: number) {
+const LS_SETUP_KEY = 'as-courage.themeSetup.v1';
+const LS_NOTE_KEY_BASE_V1 = 'as-courage.notes.v1';
+const LS_NOTE_KEY_V2 = 'as-courage.notes.v2';
+
+function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-function formatDateDEshort(d: Date) {
-  const dd = pad2(d.getDate());
-  const mm = pad2(d.getMonth() + 1);
-  const yy = pad2(d.getFullYear() % 100);
-  return `${dd}.${mm}.${yy}`;
+function toIsoDate(date: Date): string {
+  const yyyy = date.getFullYear();
+  const mm = pad2(date.getMonth() + 1);
+  const dd = pad2(date.getDate());
+  return `${yyyy}-${mm}-${dd}`;
 }
 
-function addDays(base: Date, days: number) {
+function parseIsoDate(iso?: string | null): Date | null {
+  if (!iso) return null;
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function addDays(base: Date, days: number): Date {
   const d = new Date(base);
   d.setDate(d.getDate() + days);
   return d;
+}
+
+function formatDateDE(date: Date): string {
+  return `${pad2(date.getDate())}.${pad2(date.getMonth() + 1)}.${date.getFullYear()}`;
+}
+
+function formatDateRange(startIso?: string | null, endIso?: string | null): string {
+  const start = parseIsoDate(startIso);
+  const end = parseIsoDate(endIso);
+
+  if (!start && !end) return 'Datum unbekannt';
+  if (start && !end) return formatDateDE(start);
+  if (!start && end) return formatDateDE(end);
+
+  return `${formatDateDE(start as Date)} – ${formatDateDE(end as Date)}`;
+}
+
+function prettifyId(id: string): string {
+  const cleaned = id.replace(/^ed\d+-\d+-/i, '').replace(/-/g, ' ').trim();
+  if (!cleaned) return 'Thema';
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+function displayTitle(theme: { id: string; title?: string }): string {
+  const title = theme.title?.trim();
+  return title && title.length > 0 ? title : prettifyId(theme.id);
+}
+
+function createRunId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `run-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function sortRunsAscending(a: NotesRun, b: NotesRun): number {
+  const byWeek = a.weekStartIso.localeCompare(b.weekStartIso);
+  if (byWeek !== 0) return byWeek;
+  return (a.createdAt ?? '').localeCompare(b.createdAt ?? '');
+}
+
+function sortRunsDescending(a: NotesRun, b: NotesRun): number {
+  return sortRunsAscending(b, a);
+}
+
+function normalizeQuestions(input: unknown): ThemeQuestions {
+  const next: ThemeQuestions = { ...DEFAULT_QUESTIONS };
+
+  if (Array.isArray(input)) {
+    next.Mo = typeof input[0] === 'string' ? input[0] : next.Mo;
+    next.Di = typeof input[1] === 'string' ? input[1] : next.Di;
+    next.Mi = typeof input[2] === 'string' ? input[2] : next.Mi;
+    next.Do = typeof input[3] === 'string' ? input[3] : next.Do;
+    next.Fr = typeof input[4] === 'string' ? input[4] : next.Fr;
+    return next;
+  }
+
+  if (input && typeof input === 'object') {
+    const obj = input as Record<string, unknown>;
+    next.Mo = typeof obj.Mo === 'string' ? obj.Mo : typeof obj.mo === 'string' ? obj.mo : next.Mo;
+    next.Di = typeof obj.Di === 'string' ? obj.Di : typeof obj.di === 'string' ? obj.di : next.Di;
+    next.Mi = typeof obj.Mi === 'string' ? obj.Mi : typeof obj.mi === 'string' ? obj.mi : next.Mi;
+    next.Do = typeof obj.Do === 'string' ? obj.Do : typeof obj.do === 'string' ? obj.do : next.Do;
+    next.Fr = typeof obj.Fr === 'string' ? obj.Fr : typeof obj.fr === 'string' ? obj.fr : next.Fr;
+  }
+
+  return next;
+}
+
+function readAllNotesV2(): Record<string, NotesRun[]> {
+  try {
+    const raw = localStorage.getItem(LS_NOTE_KEY_V2);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, NotesRun[]>;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function readThemeRuns(themeId: string): NotesRun[] {
+  const all = readAllNotesV2();
+  const runs = all[themeId];
+  return Array.isArray(runs) ? runs : [];
+}
+
+function writeThemeRuns(themeId: string, runs: NotesRun[]): void {
+  try {
+    const all = readAllNotesV2();
+    all[themeId] = runs;
+    localStorage.setItem(LS_NOTE_KEY_V2, JSON.stringify(all));
+  } catch {
+    // bewusst leer
+  }
+}
+
+function readLegacyNote(themeId: string): string {
+  try {
+    const specific = localStorage.getItem(`${LS_NOTE_KEY_BASE_V1}.${themeId}`);
+    if (specific && specific.trim()) return specific;
+    const generic = localStorage.getItem(LS_NOTE_KEY_BASE_V1);
+    return generic ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function buildThemeImageCandidates(themeId: string | null): string[] {
+  if (!themeId) return [];
+  return [
+    `/images/themes/${themeId}.jpg`,
+    `/images/themes/${themeId}.jpeg`,
+    `/images/themes/${themeId}.png`,
+    '/images/demo.jpg',
+  ];
 }
 
 function NotizenContent() {
   const searchParams = useSearchParams();
   const themeIdFromUrl = searchParams.get('themeId');
 
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [storageReady, setStorageReady] = useState(false);
+  const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
+  const [currentWeekStartIso, setCurrentWeekStartIso] = useState<string | null>(null);
+  const [currentWeekEndIso, setCurrentWeekEndIso] = useState<string | null>(null);
 
-  const [note, setNote] = useState('');
-  const [temaLabel, setTemaLabel] = useState('Thema');
+  const [displayThemeLabel, setDisplayThemeLabel] = useState('Thema');
   const [quote, setQuote] = useState('Zitat folgt…');
-  const [questions, setQuestions] = useState<Record<DayKey, string>>(DEFAULT_QUESTIONS);
+  const [questions, setQuestions] = useState<ThemeQuestions>(DEFAULT_QUESTIONS);
 
-  const LS_NOTE_KEY_BASE = 'as-courage.notes.v1';
+  const [runs, setRuns] = useState<NotesRun[]>([]);
+  const [themeImageIndex, setThemeImageIndex] = useState(0);
 
-  const { activeThemeId, weekStart } = useMemo(() => {
+  const themeImageCandidates = useMemo(() => buildThemeImageCandidates(activeThemeId), [activeThemeId]);
+  const themeImageSrc = themeImageCandidates[themeImageIndex] ?? null;
+
+  useEffect(() => {
+    setThemeImageIndex(0);
+  }, [activeThemeId]);
+
+  useEffect(() => {
     try {
-      const raw = localStorage.getItem('as-courage.themeSetup.v1');
-      if (!raw) return { activeThemeId: null as any, weekStart: null as Date | null };
+      const raw = localStorage.getItem(LS_SETUP_KEY);
+      const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
 
-      const parsed: any = JSON.parse(raw);
-
-      const active =
+      const selectedThemeIds = Array.isArray(parsed?.themeIds) ? parsed.themeIds.map(String) : [];
+      const resolvedThemeId =
         themeIdFromUrl ??
-        (Array.isArray(parsed?.themeIds) ? parsed.themeIds[0] : null) ??
-        parsed?.selectedThemeId ??
-        parsed?.themeId ??
-        parsed?.theme?.id ??
-        parsed?.selectedTheme?.id ??
+        (selectedThemeIds.length > 0 ? selectedThemeIds[0] : null) ??
+        (typeof parsed?.selectedThemeId === 'string' ? parsed.selectedThemeId : null) ??
+        (typeof parsed?.themeId === 'string' ? parsed.themeId : null) ??
         null;
 
-      // Woche berechnen: startMonday + (Index in themeIds) * 7
-      let ws: Date | null = null;
-      const startMondayStr: string | undefined = parsed?.startMonday;
-      const themeIds: any[] = Array.isArray(parsed?.themeIds) ? parsed.themeIds : [];
+      let weekStartIso: string | null = null;
+      let weekEndIso: string | null = null;
 
-      if (startMondayStr && typeof startMondayStr === 'string' && themeIds.length > 0 && active) {
-        const idx = themeIds.findIndex((id) => String(id) === String(active));
+      const startMonday =
+        typeof parsed?.startMonday === 'string' && parsed.startMonday.length === 10
+          ? parsed.startMonday
+          : null;
+
+      if (resolvedThemeId && startMonday && selectedThemeIds.length > 0) {
+        const idx = selectedThemeIds.findIndex((id) => String(id) === String(resolvedThemeId));
         if (idx >= 0) {
-          const start = new Date(startMondayStr + 'T00:00:00');
-          if (!Number.isNaN(start.getTime())) ws = addDays(start, idx * 7);
+          const monday = addDays(new Date(`${startMonday}T00:00:00`), idx * 7);
+          const friday = addDays(monday, 4);
+          weekStartIso = toIsoDate(monday);
+          weekEndIso = toIsoDate(friday);
         }
       }
 
-      return { activeThemeId: active, weekStart: ws };
+      setActiveThemeId(resolvedThemeId ? String(resolvedThemeId) : null);
+      setCurrentWeekStartIso(weekStartIso);
+      setCurrentWeekEndIso(weekEndIso);
     } catch {
-      return { activeThemeId: null as any, weekStart: null as Date | null };
+      setActiveThemeId(themeIdFromUrl);
+      setCurrentWeekStartIso(null);
+      setCurrentWeekEndIso(null);
+    } finally {
+      setStorageReady(true);
     }
   }, [themeIdFromUrl]);
 
-  // Notizen themenbezogen speichern (aber kompatibel laden)
-  const noteStorageKey = useMemo(() => {
-    return activeThemeId ? `${LS_NOTE_KEY_BASE}.${String(activeThemeId)}` : LS_NOTE_KEY_BASE;
-  }, [activeThemeId]);
+  useEffect(() => {
+    if (!storageReady || !activeThemeId) return;
 
-  const dayLabels = useMemo(() => {
-    const days: DayKey[] = ['Mo', 'Di', 'Mi', 'Do', 'Fr'];
-    const labels: Record<DayKey, string> = { Mo: 'Mo', Di: 'Di', Mi: 'Mi', Do: 'Do', Fr: 'Fr' };
+    const themes = edition1 as unknown as EditionRow[];
 
-    if (!weekStart) return labels;
+    const found =
+      themes.find((t) => t?.id === activeThemeId) ||
+      themes.find((t) => String(t?.id) === String(activeThemeId)) ||
+      null;
 
-    days.forEach((k, i) => {
-      const d = addDays(weekStart, i);
-      labels[k] = `${k}, ${formatDateDEshort(d)}`;
+    if (!found) {
+      setDisplayThemeLabel(prettifyId(activeThemeId));
+      setQuote('Zitat folgt…');
+      setQuestions(DEFAULT_QUESTIONS);
+      return;
+    }
+
+    setDisplayThemeLabel(displayTitle(found));
+    setQuote(typeof found.quote === 'string' && found.quote.trim() ? found.quote : 'Zitat folgt…');
+    setQuestions(normalizeQuestions(found.questions));
+  }, [storageReady, activeThemeId]);
+
+  useEffect(() => {
+    if (!storageReady || !activeThemeId) return;
+
+    let nextRuns = readThemeRuns(activeThemeId);
+
+    const legacyNote = readLegacyNote(activeThemeId).trim();
+
+    if (nextRuns.length === 0 && legacyNote) {
+      const fallbackStartIso = currentWeekStartIso ?? toIsoDate(new Date());
+      const fallbackEndIso =
+        currentWeekEndIso ?? toIsoDate(addDays(parseIsoDate(fallbackStartIso) ?? new Date(), 4));
+
+      nextRuns = [
+        {
+          runId: createRunId(),
+          weekStartIso: fallbackStartIso,
+          weekEndIso: fallbackEndIso,
+          notes: legacyNote,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          importedLegacy: true,
+        },
+      ];
+    }
+
+    if (currentWeekStartIso && currentWeekEndIso) {
+      const hasCurrentRun = nextRuns.some(
+        (run) =>
+          run.weekStartIso === currentWeekStartIso && run.weekEndIso === currentWeekEndIso,
+      );
+
+      if (!hasCurrentRun) {
+        nextRuns = [
+          ...nextRuns,
+          {
+            runId: createRunId(),
+            weekStartIso: currentWeekStartIso,
+            weekEndIso: currentWeekEndIso,
+            notes: '',
+            createdAt: new Date().toISOString(),
+          },
+        ];
+      }
+    }
+
+    nextRuns = [...nextRuns].sort(sortRunsAscending);
+    writeThemeRuns(activeThemeId, nextRuns);
+    setRuns(nextRuns);
+  }, [storageReady, activeThemeId, currentWeekStartIso, currentWeekEndIso]);
+
+  function updateRunNotes(runId: string, value: string) {
+    setRuns((prev) => {
+      const next = prev.map((run) =>
+        run.runId === runId
+          ? {
+            ...run,
+            notes: value,
+            updatedAt: new Date().toISOString(),
+          }
+          : run,
+      );
+
+      if (activeThemeId) writeThemeRuns(activeThemeId, next);
+      return next;
     });
-
-    return labels;
-  }, [weekStart]);
-
-  // Notiz laden (erst themenspezifisch, sonst Fallback)
-  useEffect(() => {
-    try {
-      const v1 = localStorage.getItem(noteStorageKey);
-      if (v1) {
-        setNote(v1);
-        return;
-      }
-      const legacy = localStorage.getItem(LS_NOTE_KEY_BASE);
-      if (legacy) {
-        setNote(legacy);
-        localStorage.setItem(noteStorageKey, legacy);
-      }
-    } catch {
-      // still
-    }
-  }, [noteStorageKey]);
-
-  // Notiz speichern
-  useEffect(() => {
-    try {
-      localStorage.setItem(noteStorageKey, note);
-    } catch {
-      // still
-    }
-  }, [note, noteStorageKey]);
-
-  // Thema / Zitat / Fragen laden
-  useEffect(() => {
-    try {
-      const themeIdOrNr = activeThemeId;
-
-      const themes: any[] = (edition1 as any)?.themes ?? (edition1 as any)?.data ?? (edition1 as any) ?? [];
-
-      const found: any =
-        themes.find((t) => t?.id === themeIdOrNr) ||
-        themes.find((t) => t?.nr === themeIdOrNr) ||
-        themes.find((t) => t?.number === themeIdOrNr) ||
-        themes.find((t) => String(t?.id) === String(themeIdOrNr)) ||
-        themes.find((t) => String(t?.nr) === String(themeIdOrNr)) ||
-        themes.find((t) => String(t?.number) === String(themeIdOrNr));
-
-      if (!found) return;
-
-      const label =
-        String(found?.title ?? found?.name ?? found?.thema ?? found?.label ?? found?.id ?? 'Thema') || 'Thema';
-
-      const zitat = found?.quote ?? found?.zitat ?? found?.Zitat ?? 'Zitat folgt…';
-
-      const q =
-        found?.questions ??
-        found?.impulses ??
-        found?.tagesimpulse ??
-        found?.days ??
-        found?.weekdays ??
-        null;
-
-      const nextQuestions: Record<DayKey, string> = { ...DEFAULT_QUESTIONS };
-
-      if (Array.isArray(q)) {
-        nextQuestions.Mo = q[0] ?? nextQuestions.Mo;
-        nextQuestions.Di = q[1] ?? nextQuestions.Di;
-        nextQuestions.Mi = q[2] ?? nextQuestions.Mi;
-        nextQuestions.Do = q[3] ?? nextQuestions.Do;
-        nextQuestions.Fr = q[4] ?? nextQuestions.Fr;
-      } else if (q && typeof q === 'object') {
-        nextQuestions.Mo = (q as any).Mo ?? (q as any).mo ?? (q as any).monday ?? nextQuestions.Mo;
-        nextQuestions.Di = (q as any).Di ?? (q as any).di ?? (q as any).tuesday ?? nextQuestions.Di;
-        nextQuestions.Mi = (q as any).Mi ?? (q as any).mi ?? (q as any).wednesday ?? nextQuestions.Mi;
-        nextQuestions.Do = (q as any).Do ?? (q as any).do ?? (q as any).thursday ?? nextQuestions.Do;
-        nextQuestions.Fr = (q as any).Fr ?? (q as any).fr ?? (q as any).friday ?? nextQuestions.Fr;
-      }
-
-      setTemaLabel(label);
-      setQuote(String(zitat ?? 'Zitat folgt…'));
-      setQuestions(nextQuestions);
-    } catch {
-      // still
-    }
-  }, [activeThemeId]);
-
-  function onClear() {
-    setNote('');
-    try {
-      localStorage.removeItem(noteStorageKey);
-      localStorage.removeItem(LS_NOTE_KEY_BASE);
-    } catch {
-      // still
-    }
-    textareaRef.current?.focus();
   }
 
-  function onSaveDownload() {
-    const text =
-      `Thema der Woche – ${temaLabel}\n\n` +
-      `Thema: ${temaLabel}\n\n` +
-      `Zitat: ${quote}\n\n` +
-      `Tagesimpulse:\n` +
-      `${dayLabels.Mo}, ${questions.Mo}\n` +
-      `${dayLabels.Di}, ${questions.Di}\n` +
-      `${dayLabels.Mi}, ${questions.Mi}\n` +
-      `${dayLabels.Do}, ${questions.Do}\n` +
-      `${dayLabels.Fr}, ${questions.Fr}\n\n` +
-      `Notizen:\n${note}\n\n` +
-      `---\n` +
-      `Projekt von Andreas Sedlag, Kompetenztrainer und systemischer Coach | www.thema-der-woche.com | mailto: (t.b.d.)\n`;
+  function deleteRun(runId: string) {
+    const confirmed = window.confirm(
+      'Diese Notiz wird endgültig aus dem localStorage gelöscht. Möchtest du wirklich fortfahren?',
+    );
 
-    const safeName = String(temaLabel).replace(/\s+/g, '_').replace(/[^\w\-äöüÄÖÜß]/g, '');
+    if (!confirmed) return;
+
+    setRuns((prev) => {
+      const next = prev.filter((run) => run.runId !== runId);
+      if (activeThemeId) writeThemeRuns(activeThemeId, next);
+      return next;
+    });
+  }
+
+  function handleSaveDownload() {
+    const runNumbersLocal = new Map<string, number>();
+    [...runs].sort(sortRunsAscending).forEach((run, index) => {
+      runNumbersLocal.set(run.runId, index + 1);
+    });
+
+    const displayRunsLocal = [...runs].sort(sortRunsDescending);
+
+    const runLines = displayRunsLocal.flatMap((run) => [
+      `${runNumbersLocal.get(run.runId) ?? 1}. Durchlauf | ${formatDateRange(run.weekStartIso, run.weekEndIso)}`,
+      run.notes?.trim() ? run.notes : '—',
+      '',
+    ]);
+
+    const text =
+      `Thema der Woche – ${displayThemeLabel}\n\n` +
+      `Thema: ${displayThemeLabel}\n\n` +
+      `Zitat: ${quote}\n\n` +
+      `Fragen der Woche:\n` +
+      `${DAY_KEYS.map((dayKey) => `${dayKey}: ${questions[dayKey]}`).join('\n')}\n\n` +
+      `Notizenverlauf:\n` +
+      `${runLines.join('\n')}\n`;
+
+    const safeName = String(displayThemeLabel)
+      .replace(/\s+/g, '_')
+      .replace(/[^\w\-äöüÄÖÜß]/g, '');
+
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
 
@@ -220,204 +386,220 @@ function NotizenContent() {
     URL.revokeObjectURL(url);
   }
 
-  function onPrint() {
+  function handlePrint(): void {
     window.print();
   }
 
-  const PrintFooter = (
-    <div className="print-footer">
-      <span>Projekt von Andreas Sedlag, Kompetenztrainer und systemischer Coach | </span>
-      <a href="https://www.thema-der-woche.com">www.thema-der-woche.com</a>
-      <span> | </span>
-      <a href="mailto:t.b.d.">mailto: (t.b.d.)</a>
-      <span className="pagehint"> | Seitenzahl: </span>
-    </div>
-  );
+  const chronologicalRuns = useMemo(() => {
+    return [...runs].sort(sortRunsAscending);
+  }, [runs]);
 
-  return (
-    <>
-      <style>{`
-        @media print {
-          @page {
-            size: A4;
-            margin: 10mm 12mm 12mm 12mm;
-          }
+  const runNumbers = useMemo(() => {
+    const map: Record<string, number> = {};
+    chronologicalRuns.forEach((run, index) => {
+      map[run.runId] = index + 1;
+    });
+    return map;
+  }, [chronologicalRuns]);
 
-          html, body {
-            background: white !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
+  const currentRun = useMemo(() => {
+    if (!currentWeekStartIso || !currentWeekEndIso) return null;
+    return (
+      runs.find(
+        (run) =>
+          run.weekStartIso === currentWeekStartIso && run.weekEndIso === currentWeekEndIso,
+      ) ?? null
+    );
+  }, [runs, currentWeekStartIso, currentWeekEndIso]);
 
-          body { background-image: none !important; }
-          .print-page-bg { display: none !important; }
+  const displayRuns = useMemo(() => {
+    const sorted = [...runs].sort(sortRunsDescending);
 
-          * {
-            box-shadow: none !important;
-            filter: none !important;
-            backdrop-filter: none !important;
-          }
+    if (!currentRun) return sorted;
 
-          button, nav, .screen-only { display: none !important; }
-          .print-only { display: block !important; }
+    const others = sorted.filter((run) => run.runId !== currentRun.runId);
+    return [currentRun, ...others];
+  }, [runs, currentRun]);
 
-          /* Druck-Trick: Thead/Tfoot wiederholen sich -> kein Overlay, sauberer Abstand je Seite */
-          table.print-table { width: 100%; border-collapse: separate; border-spacing: 0; }
-          thead { display: table-header-group; }
-          tfoot { display: table-footer-group; }
-
-          .print-top-spacer { height: 18mm; } /* Platz für dein Logo (pro Seite) */
-
-          .print-footer {
-            font-size: 10px;
-            line-height: 1.2;
-            color: #334155;
-            text-align: center;
-            padding: 2mm 0;
-          }
-
-          .print-footer .pagehint { margin-left: 6px; opacity: 0.9; }
-
-          /* Notizen druckbar */
-          .print-note { white-space: pre-wrap; }
-        }
-
-        .print-only { display: none; }
-      `}</style>
-
+  if (!storageReady) {
+    return (
       <BackgroundLayout>
-        {/* PRINT ONLY */}
-        <div className="print-only mx-auto w-full max-w-5xl px-4 py-4">
-          <table className="print-table">
-            <thead>
-              <tr>
-                <td>
-                  <div className="print-top-spacer" />
-                </td>
-              </tr>
-            </thead>
-
-            <tfoot>
-              <tr>
-                <td>{PrintFooter}</td>
-              </tr>
-            </tfoot>
-
-            <tbody>
-              <tr>
-                <td>
-                  <div className="rounded-2xl bg-white p-5">
-                    {/* oben: Thema + Zitat nebeneinander */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="rounded-xl border border-slate-200 bg-white p-4">
-                        <div className="text-sm font-semibold text-slate-900">Thema der Woche</div>
-                        <div className="mt-1 text-lg font-semibold text-slate-900">{temaLabel}</div>
-                      </div>
-
-                      <div className="rounded-xl border border-slate-200 bg-white p-4">
-                        <div className="text-sm font-semibold text-slate-900">Zitat</div>
-                        <div className="mt-1 whitespace-pre-wrap text-sm text-slate-900">{quote}</div>
-                      </div>
-                    </div>
-
-                    {/* darunter: Tagesimpulse volle Breite */}
-                    <h2 className="mt-4 text-lg font-semibold text-slate-900">{`Thema der Woche – ${temaLabel}`}</h2>
-
-                    <div className="mt-3 rounded-2xl border-2 border-slate-900/70 bg-white p-4">
-                      <ul className="space-y-1.5 text-sm text-slate-900">
-                        {(['Mo', 'Di', 'Mi', 'Do', 'Fr'] as DayKey[]).map((k) => (
-                          <li key={k} className="grid grid-cols-[120px_1fr] gap-3 leading-snug">
-                            <span className="whitespace-nowrap">{dayLabels[k]}</span>
-                            <span>{questions[k]}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {/* Notizen als Fließtext */}
-                    <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                      <div className="text-base font-medium text-slate-900">Persönliche Notizen</div>
-                      <div className="print-note mt-2 text-sm text-slate-900">{note?.trim() ? note : '—'}</div>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        {/* SCREEN ONLY */}
-        <div className="screen-only mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-4">
-          <div className="rounded-2xl bg-white/85 p-5 shadow-xl backdrop-blur-md">
-            <div className="flex items-center justify-between gap-3">
-              <Link
-                href={themeIdFromUrl ? `/quotes?themeId=${encodeURIComponent(themeIdFromUrl)}` : '/quotes'}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition-all hover:bg-slate-100 hover:border-slate-400 hover:shadow-md cursor-pointer"
-              >
-                zurück
-              </Link>
-
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Notizen</h1>
-
-              <div className="flex flex-wrap justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={onSaveDownload}
-                  className="inline-flex min-h-[44px] items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition-all hover:bg-slate-100 hover:border-slate-400 hover:shadow-md cursor-pointer"
-                >
-                  Speichern
-                </button>
-                <button
-                  type="button"
-                  onClick={onClear}
-                  className="inline-flex min-h-[44px] items-center rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-700 shadow-sm transition-all hover:bg-rose-50 hover:border-rose-400 hover:shadow-md cursor-pointer"
-                >
-                  Löschen
-                </button>
-                <button
-                  type="button"
-                  onClick={onPrint}
-                  className="inline-flex min-h-[44px] items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition-all hover:bg-slate-100 hover:border-slate-400 hover:shadow-md cursor-pointer"
-                >
-                  Drucken
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-lg text-slate-900">
-              <span className="font-medium">Zitat:</span> <span className="whitespace-pre-wrap">{quote}</span>
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-white/85 p-5 shadow-xl backdrop-blur-md">
-            <h2 className="text-lg font-semibold text-slate-900">{`Thema der Woche – ${temaLabel}`}</h2>
-
-            <div className="mt-3 rounded-2xl border-2 border-slate-900/70 bg-white p-4">
-              <ul className="space-y-1.5 text-sm text-slate-900">
-                {(['Mo', 'Di', 'Mi', 'Do', 'Fr'] as DayKey[]).map((k) => (
-                  <li key={k} className="grid grid-cols-[120px_1fr] gap-3 leading-snug">
-                    <span className="whitespace-nowrap">{dayLabels[k]}</span>
-                    <span>{questions[k]}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="text-base font-medium text-slate-900">Persönliche Notizen</div>
-
-              <textarea
-                ref={textareaRef}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Schreibe hier deine Notizen…"
-                className="mt-2 min-h-[320px] w-full rounded-2xl border border-slate-300 bg-white p-4 text-base text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/20"
-              />
-            </div>
+        <div className="mx-auto flex min-h-[70vh] w-full max-w-5xl items-center justify-center px-4 py-6">
+          <div className="rounded-2xl bg-white/90 px-6 py-5 shadow-xl backdrop-blur-md">
+            <p className="text-base font-semibold text-slate-900">Notizen werden geladen …</p>
           </div>
         </div>
       </BackgroundLayout>
-    </>
+    );
+  }
+
+  return (
+    <BackgroundLayout>
+      <div className="mx-auto w-full max-w-5xl px-4 py-6 print:px-0 print:py-0">
+        <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white/95 shadow-xl backdrop-blur print:rounded-none print:border-0 print:bg-white print:shadow-none">
+          <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-orange-50 px-5 py-5 sm:px-7 print:bg-white">
+            <div className="flex flex-wrap items-start justify-between gap-4 print:hidden">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Notizenverlauf
+                </p>
+                <h1 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">
+                  {displayThemeLabel}
+                </h1>
+
+                {currentRun ? (
+                  <p className="mt-2 text-sm leading-6 text-slate-600 sm:text-base">
+                    Das Thema wurde zum {runNumbers[currentRun.runId] ?? 1}. Mal gewählt.
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm leading-6 text-slate-600 sm:text-base">
+                    Neue Wochen werden ergänzt, alte Inhalte werden nicht überschrieben.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleSaveDownload}
+                  className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 hover:shadow-md"
+                >
+                  Speichern
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 hover:shadow-md"
+                >
+                  Drucken
+                </button>
+
+                <Link
+                  href={themeIdFromUrl ? `/quotes?themeId=${encodeURIComponent(themeIdFromUrl)}` : '/quotes'}
+                  className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 hover:shadow-md"
+                >
+                  zurück
+                </Link>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-5 lg:grid-cols-[1.15fr_0.95fr] lg:grid-rows-[auto_auto] lg:items-stretch print:grid-cols-1">
+              {themeImageSrc ? (
+                <div className="rounded-[28px] border border-slate-200 bg-white p-3 sm:p-4 lg:h-[440px] print:h-auto">
+                  <div className="flex h-full items-center justify-center">
+                    <img
+                      src={themeImageSrc}
+                      alt={displayThemeLabel}
+                      className="block max-h-full max-w-full object-contain"
+                      onError={() => {
+                        setThemeImageIndex((current) => current + 1);
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500 sm:text-base">
+                  Fragen der Woche
+                </p>
+
+                <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                  {DAY_KEYS.map((dayKey, index) => (
+                    <div
+                      key={dayKey}
+                      className={`grid grid-cols-[56px_1fr] gap-3 px-4 py-3 ${index !== DAY_KEYS.length - 1 ? 'border-b border-slate-200' : ''
+                        }`}
+                    >
+                      <p className="text-sm font-semibold text-slate-500">{dayKey}</p>
+                      <p className="text-sm leading-6 text-slate-800">{questions[dayKey]}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-slate-200 bg-white px-5 py-5 sm:px-6 lg:col-span-2">
+                <p className="text-base leading-8 text-slate-800 sm:text-lg">
+                  <span className="font-semibold text-slate-500">Zitat - </span>
+                  {quote.replace(/\s*\n+\s*/g, ' ').trim()}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-5 py-5 sm:px-7 sm:py-7">
+            <div className="space-y-5">
+              {displayRuns.length === 0 ? (
+                <div className="rounded-[28px] border border-slate-200 bg-white px-5 py-5 text-sm text-slate-600">
+                  Für dieses Thema liegt noch kein Notizdurchlauf vor.
+                </div>
+              ) : (
+                displayRuns.map((run) => {
+                  const isCurrentRun = currentRun?.runId === run.runId;
+
+                  return (
+                    <section
+                      key={run.runId}
+                      className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
+                    >
+                      <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-4 sm:px-6">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h2 className="text-lg font-bold text-slate-900 sm:text-xl">
+                                {runNumbers[run.runId] ?? 1}. Durchlauf
+                              </h2>
+
+                              {isCurrentRun ? (
+                                <span className="rounded-full bg-[#F29420] px-3 py-1 text-xs font-semibold text-black">
+                                  aktueller Durchlauf
+                                </span>
+                              ) : null}
+
+                              {run.importedLegacy ? (
+                                <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">
+                                  aus alter Notiz übernommen
+                                </span>
+                              ) : null}
+                            </div>
+
+                            <p className="mt-2 text-sm font-medium text-slate-600">
+                              {formatDateRange(run.weekStartIso, run.weekEndIso)}
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => deleteRun(run.runId)}
+                            className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-2xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 shadow-sm transition hover:-translate-y-0.5 hover:border-red-300 hover:bg-red-50 hover:shadow-md"
+                          >
+                            Löschen
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="px-5 py-5 sm:px-6">
+                        <textarea
+                          value={run.notes}
+                          onChange={(e) => updateRunNotes(run.runId, e.target.value)}
+                          placeholder="Schreibe hier deine Notizen…"
+                          className="min-h-[220px] w-full rounded-[24px] border border-slate-300 bg-white p-4 text-base text-slate-900 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 print:hidden"
+                        />
+
+                        <div className="hidden whitespace-pre-wrap rounded-[24px] border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-900 print:block">
+                          {run.notes?.trim() ? run.notes : '—'}
+                        </div>
+                      </div>
+                    </section>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </BackgroundLayout>
   );
 }
 
