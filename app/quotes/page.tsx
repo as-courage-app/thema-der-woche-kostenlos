@@ -12,6 +12,7 @@ import { podcastEpisodes } from '../../lib/podcastEpisodes';
 import RequireAuth from '@/components/RequireAuth';
 import { getAppMode } from '@/lib/appMode';
 import MediathekMenu from './MediathekMenu';
+import { EmbeddedNotesHistoryCard } from '@/components/notes/NotesHistoryCard';
 
 const LS_SETUP = 'as-courage.themeSetup.v1';
 
@@ -309,6 +310,7 @@ export default function QuotesPage() {
   const current: EditionRow | null = totalPages > 0 ? selectedThemes[clampedIndex] : null;
 
   const [showPodcast, setShowPodcast] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
   const [podcastNotice, setPodcastNotice] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
@@ -388,7 +390,7 @@ export default function QuotesPage() {
     <AuthWrapper>
       <BackgroundLayout activeThemeId={current?.id}>
         <div className="mx-auto flex h-full min-h-[100svh] lg:min-h-0 max-w-6xl px-10 py-3">
-          <div className="w-full max-h-none lg:max-h-[calc(100vh-10rem)] rounded-none sm:rounded-2xl bg-white/98 sm:bg-white/85 shadow-none sm:shadow-xl backdrop-blur-md min-h-[100dvh] sm:min-h-0 overflow-visible lg:overflow-hidden flex flex-col">
+          <div className="w-full max-h-none rounded-none sm:rounded-2xl bg-white/98 sm:bg-white/85 shadow-none sm:shadow-xl backdrop-blur-md min-h-[100dvh] sm:min-h-0 overflow-visible flex flex-col">
             {/* Kopf */}
             <div className="p-5 sm:p-7 shrink-0">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -428,7 +430,7 @@ export default function QuotesPage() {
                     <button
                       type="button"
                       onClick={() => router.push('/themes')}
-                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg cursor-pointer"
+                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[#F29420] bg-[#F29420] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#E4891E] hover:bg-[#E4891E] hover:shadow-lg cursor-pointer"
                     >
                       zurück zur Themenauswahl
                     </button>
@@ -461,9 +463,9 @@ export default function QuotesPage() {
                   onClick={goPrev}
                   disabled={!canPrev}
                   className={[
-                    'min-h-[44px] rounded-xl px-4 py-2 text-sm font-medium border shadow-sm transition-all',
+                    'min-h-[44px] rounded-xl px-4 py-2 text-sm font-medium border shadow-sm transition duration-200',
                     canPrev
-                      ? 'border-slate-300 bg-white text-slate-900 hover:bg-slate-100 hover:border-slate-400 hover:shadow-md cursor-pointer'
+                      ? 'border-slate-900 bg-slate-900 text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-black hover:border-black hover:shadow-lg cursor-pointer'
                       : 'border-slate-200 bg-white text-slate-400 cursor-not-allowed',
                   ].join(' ')}
                 >
@@ -475,9 +477,9 @@ export default function QuotesPage() {
                   onClick={goNext}
                   disabled={!canNext}
                   className={[
-                    'min-h-[44px] rounded-xl px-4 py-2 text-sm font-medium border shadow-sm transition-all',
+                    'min-h-[44px] rounded-xl px-4 py-2 text-sm font-medium border shadow-sm transition duration-200',
                     canNext
-                      ? 'border-slate-300 bg-white text-slate-900 hover:bg-slate-100 hover:border-slate-400 hover:shadow-md cursor-pointer'
+                      ? 'border-slate-900 bg-slate-900 text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-black hover:border-black hover:shadow-lg cursor-pointer'
                       : 'border-slate-200 bg-white text-slate-400 cursor-not-allowed',
                   ].join(' ')}
                 >
@@ -504,13 +506,15 @@ export default function QuotesPage() {
                 <DetailsMenu themeId={current?.id} />
 
 
-                <Link
-                  href={current?.id ? `/notizen?themeId=${encodeURIComponent(current.id)}` : '/notizen'}
-                  className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition-all hover:bg-slate-100 hover:border-slate-400 hover:shadow-md cursor-pointer"
-                  title="Notizen öffnen"
+                <button
+                  type="button"
+                  onClick={() => setShowNotes((value) => !value)}
+                  className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg cursor-pointer"
+                  title="Notizen einblenden oder ausblenden"
                 >
-                  <span aria-hidden="true" className="text-base leading-none">📝</span> Notizen
-                </Link>
+                  <span aria-hidden="true" className="text-base leading-none">📝</span>{' '}
+                  {showNotes ? 'Notizen ausblenden' : 'Notizen einblenden'}
+                </button>
 
                 <div className="ml-auto text-sm text-slate-700">
                   {totalPages > 0 ? (
@@ -551,85 +555,100 @@ export default function QuotesPage() {
             ) : null}
 
             {/* Split-Bereich */}
-            <div className="flex-1 min-h-0 overflow-auto lg:overflow-hidden px-5 pb-5 sm:px-7 sm:pb-7">
+            <div className={showNotes ? 'px-5 pb-5 sm:px-7 sm:pb-7' : 'flex-1 min-h-0 overflow-auto lg:overflow-hidden px-5 pb-5 sm:px-7 sm:pb-7'}>
               {!current ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                   Ich finde noch keine ausgewählten Themen. Bitte gehe zur Themenauswahl und wähle Themen aus.
                 </div>
               ) : (
-                <div className="rounded-2xl border border-slate-200 bg-white lg:h-full lg:overflow-hidden">
-                  <div className="flex flex-col lg:flex-row">
-                    {/* LINKS: Bild */}
-                    <div className="relative lg:w-1/2 bg-slate-100">
-                      <div className="h-64 lg:h-full">
-                        <img
-                          src={imageSrc}
-                          alt={`Bild zu ${currentTitle}`}
-                          className="h-full w-full object-cover object-center"
-                          onError={() => setImgFallbackToDemo(true)}
-                        />
+                <>
+                  <div
+                    className={
+                      showNotes
+                        ? 'rounded-2xl border border-slate-200 bg-white'
+                        : 'rounded-2xl border border-slate-200 bg-white lg:h-full lg:overflow-hidden'
+                    }
+                  >
+                    <div className="flex flex-col lg:flex-row">
+                      {/* LINKS: Bild */}
+                      <div className="relative lg:w-1/2 bg-slate-100">
+                        <div className="h-64 lg:h-full">
+                          <img
+                            src={imageSrc}
+                            alt={`Bild zu ${currentTitle}`}
+                            className="h-full w-full object-cover object-center"
+                            onError={() => setImgFallbackToDemo(true)}
+                          />
+                        </div>
                       </div>
-                    </div>
 
-                    {/* RECHTS: Inhalt */}
-                    <div className="lg:w-1/2 lg:h-full lg:overflow-auto">
-                      <div className="p-5 lg:p-6">
-                        <div className="flex flex-wrap items-baseline justify-between gap-2">
-                          <h2 className="text-lg font-semibold text-slate-900">{currentTitle}</h2>
-                          <div className="text-sm text-slate-600">
-                            {dateRangeText ? <span className="font-medium">{dateRangeText}</span> : null}
+                      {/* RECHTS: Inhalt */}
+                      <div className="lg:w-1/2 lg:h-full lg:overflow-auto">
+                        <div className="p-5 lg:p-6">
+                          <div className="flex flex-wrap items-baseline justify-between gap-2">
+                            <h2 className="text-lg font-semibold text-slate-900">{currentTitle}</h2>
+                            <div className="text-sm text-slate-600">
+                              {dateRangeText ? <span className="font-medium">{dateRangeText}</span> : null}
+                            </div>
                           </div>
-                        </div>
 
-                        <div
-                          className="mt-3 sticky top-0 z-10 rounded-xl p-4 shadow"
-                          style={{ backgroundColor: BRAND_ORANGE, color: '#ffffff' }}
-                        >
-                          <div className="text-xs uppercase tracking-wide opacity-90">Wochenzitat</div>
-                          <div className="mt-1 text-lg font-semibold leading-relaxed">„{current.quote}“</div>
-                        </div>
-
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          {WEEKDAYS.map((d) => (
-                            <button
-                              key={d.key}
-                              type="button"
-                              onClick={() =>
-                                setActiveDay((prev) => ({
-                                  ...prev,
-                                  [current.id]: d.index,
-                                }))
-                              }
-                              className={[
-                                'rounded-full px-3 py-1.5 text-xs border',
-                                dayIndex === d.index
-                                  ? 'bg-slate-900 text-white border-slate-900'
-                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50',
-                              ].join(' ')}
-                            >
-                              <span className="flex flex-col items-center leading-tight">
-                                <span>{d.key}</span>
-                                <span className="text-[10px] opacity-80">{weekdayDateText(d.index)}</span>
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-
-                        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                          <div className="text-sm font-medium text-slate-800">{WEEKDAYS[dayIndex].label}</div>
-                          <div className="mt-1 text-sm text-slate-900 leading-relaxed">
-                            {current.questions?.[dayIndex] ?? '—'}
+                          <div
+                            className="mt-3 sticky top-0 z-10 rounded-xl border-2 bg-slate-50 p-4 shadow-sm"
+                            style={{ borderColor: BRAND_ORANGE }}
+                          >
+                            <div className="text-sm font-semibold tracking-wide text-slate-900">Wochenzitat</div>
+                            <div className="mt-2 text-lg leading-relaxed text-slate-900">„{current.quote}“</div>
                           </div>
-                        </div>
 
-                        <div className="h-6" />
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {WEEKDAYS.map((d) => (
+                              <button
+                                key={d.key}
+                                type="button"
+                                onClick={() =>
+                                  setActiveDay((prev) => ({
+                                    ...prev,
+                                    [current.id]: d.index,
+                                  }))
+                                }
+                                className={[
+                                  'rounded-full px-3 py-1.5 text-xs border shadow-sm transition duration-200 cursor-pointer',
+                                  dayIndex === d.index
+                                    ? 'bg-slate-900 text-white border-slate-900 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-black hover:border-black hover:shadow-md'
+                                    : 'bg-white text-slate-700 border-slate-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-slate-50 hover:border-slate-300 hover:shadow-md',
+                                ].join(' ')}
+                              >
+                                <span className="flex flex-col items-center leading-tight">
+                                  <span>{d.key}</span>
+                                  <span className="text-[10px] opacity-80">{weekdayDateText(d.index)}</span>
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+
+                          <div className="mt-3 rounded-xl border-2 border-[#F29420] bg-slate-50 p-4">
+                            <div className="text-sm font-medium text-slate-800">{WEEKDAYS[dayIndex].label}</div>
+                            <div className="mt-1 text-sm text-slate-900 leading-relaxed">
+                              {current.questions?.[dayIndex] ?? '—'}
+                            </div>
+                          </div>
+
+                          <div className="h-6" />
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+
+                  {showNotes && current?.id ? (
+                    <div className="mt-5">
+                      <EmbeddedNotesHistoryCard themeId={current.id} />
+                    </div>
+                  ) : null}
+                </>
               )}
             </div>
 
+            {/* Footer */}
             {/* Footer */}
           </div>
         </div>
