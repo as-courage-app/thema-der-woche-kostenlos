@@ -395,12 +395,13 @@ export default function QuotesPage() {
             <div className="p-5 sm:p-7 shrink-0">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-                    Zitate &amp; Tagesimpulse{' '}
-                    <span className="text-base font-normal tracking-wide text-slate-600">
-                      (Edition 1 - kostenlos)
-                    </span>
+                  <h1 className="text-2xl font-semibold text-slate-900">
+                    Thema der Woche <span className="text-slate-600">(Edition 1)</span>
                   </h1>
+
+                  <div className="mt-2 text-sm text-slate-700">
+                    <span className="text-base font-semibold text-[#F29420]">Kostenlose Version</span>
+                  </div>
                 </div>
 
                 <div className="flex w-full items-center justify-between gap-2 sm:w-auto">

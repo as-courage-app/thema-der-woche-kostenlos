@@ -32,7 +32,7 @@ export default function VersionPage() {
   return (
     <BackgroundLayout showLogout={false}>
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
-        <section className="rounded-2xl bg-white/85 p-6 shadow-xl backdrop-blur-md">
+        <section className="rounded-2xl border border-[#F29420] bg-white/85 p-6 shadow-xl backdrop-blur-md">
           <div className="flex items-start justify-between gap-3">
             <h1 className="text-2xl font-semibold text-slate-900">
               Thema der Woche <span className="text-slate-600">(Edition 1)</span>
@@ -51,7 +51,7 @@ export default function VersionPage() {
           <div className="mt-2 text-sm text-slate-700">Browserbasierte App (ohne Installation) für PC · Android · Apple - und analog als Tischaufsteller</div>
 
           {/* Hinweis (temporär) */}
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-white/85 p-4 text-sm text-slate-700 shadow-sm backdrop-blur">
+          <div className="mt-4 rounded-2xl border border-[#F29420] bg-white/85 p-4 text-sm text-slate-700 shadow-sm backdrop-blur">
             <div className="text-lg font-semibold text-slate-900">Herzlich willkommen beim Thema der Woche</div>
             <p className="mt-3 text-base text-slate-700">
               <span className="font-semibold">Ein Thema pro Woche. Ein Impuls pro Tag. Mehr Miteinander.</span>
@@ -90,12 +90,12 @@ export default function VersionPage() {
               className="w-full rounded-2xl shadow-md ring-1 ring-slate-200"
             />
 
-            <div className="mt-4 rounded-2xl bg-white/85 p-6 shadow-sm ring-1 ring-slate-200">
+            <div className="mt-4 rounded-2xl bg-white/85 p-6 shadow-sm ring-1 ring-[#F29420]">
 
               <h2 className="text-xl font-semibold text-slate-900">Mini-Impulse für Führung und wertschätzende Kommunikation</h2>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                <div className="rounded-2xl bg-white p-4 ring-1 ring-[#F29420]">
                   <div className="text-sm font-semibold text-slate-900">Vorteile</div>
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
                     <li>Fokus mit einer klaren Haltung</li>
@@ -106,7 +106,7 @@ export default function VersionPage() {
                   </ul>
                 </div>
 
-                <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                <div className="rounded-2xl bg-white p-4 ring-1 ring-[#F29420]">
                   <div className="text-sm font-semibold text-slate-900">Ziele</div>
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
                     <li>Führung im Alltag entlasten</li>
@@ -124,16 +124,16 @@ export default function VersionPage() {
             <button
               type="button"
               onClick={() => choose('free')}
-              className="flex h-full flex-col justify-start cursor-pointer rounded-2xl border-2 border-slate-300 bg-white px-4 py-4 text-left shadow-md transition duration-200 hover:-translate-y-1 hover:border-slate-500 hover:bg-slate-50 hover:shadow-xl hover:ring-4 hover:ring-slate-200 focus:outline-none focus:ring-4 focus:ring-slate-300"
+              className="flex h-full flex-col justify-start cursor-pointer rounded-2xl border-2 border-[#F29420] bg-[#F29420] px-4 py-4 text-left shadow-md transition duration-200 hover:-translate-y-1 hover:border-[#E4891E] hover:bg-[#E4891E] hover:shadow-xl hover:ring-4 hover:ring-orange-200 focus:outline-none focus:ring-4 focus:ring-orange-300"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-base font-semibold text-slate-900">Kostenlose Version - hier klicken</div>
+                  <div className="text-base font-semibold text-white">Kostenlose Version - hier klicken</div>
                 </div>
               </div>
 
-              <div className="mt-3 text-sm text-slate-700">
-                <div className="font-semibold text-slate-900">Funktionsumfang:</div>
+              <div className="mt-3 text-sm text-white">
+                <div className="font-semibold text-white">Funktionsumfang:</div>
                 <ul className="mt-1 list-disc pl-5">
                   <li>alle 41 Wochenthemen sichtbar</li>
                   <li>4 von 41 Wochenthemen zur Auswahl</li>
@@ -148,9 +148,11 @@ export default function VersionPage() {
                   <li>Details mit 4 Infografiken + Vertiefungen</li>
                   <li>Team-/Kalenderfunktionen (iCal)</li>
                   <li>Notizfunktion mit Druckausgabe</li><br />
-                  <div className="text-base font-semibold text-slate-700">frei zum dauerhaften Testen<br />
-                    (keine Anmeldung erforderlich)</div><br />
-                  <div className="text-base font-semibold text-slate-900">ein Upgrade zur Vollversion ist jederzeit möglich</div>
+                  <div className="text-base font-semibold text-white">
+                    frei zum dauerhaften Testen<br />
+                    (keine Anmeldung erforderlich)
+                  </div><br />
+                  <div className="text-base font-semibold text-white">ein Upgrade zur Vollversion ist jederzeit möglich</div>
                   <li className="invisible" aria-hidden="true">Platzhalter</li>
                   <li className="invisible" aria-hidden="true">Platzhalter</li>
                   <li className="invisible" aria-hidden="true">Platzhalter</li>
@@ -163,17 +165,16 @@ export default function VersionPage() {
             <button
               type="button"
               onClick={() => choose('full')}
-              className="flex h-full flex-col justify-start cursor-pointer rounded-2xl border-2 border-slate-300 bg-white px-4 py-4 text-left shadow-md transition duration-200 hover:-translate-y-1 hover:border-slate-500 hover:bg-slate-50 hover:shadow-xl hover:ring-4 hover:ring-slate-200 focus:outline-none focus:ring-4 focus:ring-slate-300"
+              className="flex h-full flex-col justify-start cursor-pointer rounded-2xl border-2 border-[#F29420] bg-[#F29420] px-4 py-4 text-left shadow-md transition duration-200 hover:-translate-y-1 hover:border-[#E4891E] hover:bg-[#E4891E] hover:shadow-xl hover:ring-4 hover:ring-orange-200 focus:outline-none focus:ring-4 focus:ring-orange-300"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-base font-semibold text-slate-900">Vollversion (Lizenz) - hier klicken</div>
-
+                  <div className="text-base font-semibold text-white">Vollversion (Lizenz) - hier klicken</div>
                 </div>
               </div>
 
-              <div className="mt-3 text-sm text-slate-700">
-                <div className="font-semibold text-slate-900">Funktionsumfang (Vollversion):</div>
+              <div className="mt-3 text-sm text-white">
+                <div className="font-semibold text-white">Funktionsumfang (Vollversion):</div>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
                   <li>alle 41 Wochenthemen</li>
                   <li>alle 41 Bilder und Zitate</li>
@@ -183,7 +184,7 @@ export default function VersionPage() {
                   <li>Startdatum festlegbar (Wochenstart jeweils am Montag)</li>
                   <li>Bereits genutzte Wochen-Themen werden gekennzeichnet</li>
                   <li>Gekennzeichnete Themen sind wiederverwendbar</li><br />
-                  <div className="font-semibold text-slate-900">je nach Lizenz:</div>
+                  <div className="font-semibold text-white">je nach Lizenz:</div>
                   <li>Mediathek mit 41 Videos+Podcastfolgen</li>
                   <li>Details mit 41 Infografiken + Vertiefungen</li>
                   <li>Team-/Kalenderfunktionen (iCal)</li>
