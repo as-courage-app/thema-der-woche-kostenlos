@@ -413,7 +413,7 @@ export default function QuotesPage() {
                           const ics = buildIcsFromPlan(setup, selectedThemes);
                           downloadTextFile('thema-der-woche.ics', ics, 'text/calendar;charset=utf-8');
                         }}
-                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white transition hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-lg"
+                        className="rounded-xl border border-[#F29420] bg-[#F29420] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#E4891E]"
                         title="iCal-Datei herunterladen"
                       >
                         iCal herunterladen

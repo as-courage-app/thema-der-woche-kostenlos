@@ -49,9 +49,9 @@ export default function BackgroundLayout({
 
   return (
     <div className="relative w-full min-h-[100dvh] overflow-x-hidden">
-      {/* Hintergrundbild */}
+      {/* Feste globale Hintergrundebene */}
       <div
-        className="pointer-events-none absolute inset-0 z-0 print:hidden"
+        className="pointer-events-none fixed inset-0 z-0 print:hidden"
         aria-hidden="true"
       >
         <Image
@@ -65,11 +65,11 @@ export default function BackgroundLayout({
         {/* Mobile: Lesbarkeit */}
         <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] sm:hidden" />
         {/* Ab Tablet: leichte Abdunklung */}
-        <div className="absolute inset-0 bg-black/10 hidden sm:block" />
+        <div className="absolute inset-0 hidden bg-black/10 sm:block" />
       </div>
 
-      {/* Logo + optional Logout */}
-      <div className="absolute top-3 right-3 z-50 w-[120px] max-w-[40vw] print:hidden sm:top-4 sm:right-4 sm:w-[170px] md:w-[200px]">
+      {/* Logo + Info + Logout immer fixiert */}
+      <div className="fixed top-3 right-3 z-50 w-[120px] max-w-[40vw] print:hidden sm:top-4 sm:right-4 sm:w-[170px] md:w-[200px]">
         <div className="pointer-events-none" aria-hidden="true">
           <Image
             src="/images/logo.jpg"
@@ -81,11 +81,11 @@ export default function BackgroundLayout({
           />
         </div>
 
-        <div className="mt-2 flex flex-col items-end gap-2 pointer-events-auto">
+        <div className="mt-2 flex flex-col items-end gap-4 pointer-events-auto">
           <InfoButton className="cursor-pointer rounded-xl bg-[#F29420] text-white w-11 h-11 flex items-center justify-center text-2xl leading-none shadow-md ring-1 ring-orange-200 transition hover:-translate-y-0.5 hover:bg-[#E4891E] hover:shadow-xl hover:ring-orange-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#F29420]" />
 
           {showLogout && hasSession ? (
-            <LogoutButton className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-50" />
+            <LogoutButton />
           ) : null}
         </div>
       </div>
