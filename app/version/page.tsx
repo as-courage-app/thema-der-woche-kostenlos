@@ -48,7 +48,7 @@ export default function VersionPage() {
             </a>
           </div>
 
-          <div className="mt-2 text-sm text-slate-700">Browserbasierte App (ohne Installation) für PC · Android · Apple - und analog als Tischaufsteller</div>
+          <div className="mt-2 text-sm text-slate-700">Browserbasierte App (ohne Installation) für PC · Android · Apple - auch als Tischaufsteller und Kartenset</div>
 
           {/* Hinweis (temporär) */}
           <div className="mt-4 rounded-2xl border border-[#F29420] bg-white/85 p-4 text-sm text-slate-700 shadow-sm backdrop-blur">
@@ -77,7 +77,7 @@ export default function VersionPage() {
                 psychologische Sicherheit
               </a>{' '}
               durch kurze, alltagstaugliche Reflexionsfragen – perfekt als Gesprächseinstieg, Check-in im Team oder für die eigene
-              Selbstführung. <span className="font-semibold">Links zur App (kostenlos und Vollversion) weiter unten!</span>
+              Selbstführung. <span className="font-semibold">Direkt zur App (kostenlos und Vollversion) weiter unten!</span>
             </p>
 
           </div>
@@ -146,7 +146,7 @@ export default function VersionPage() {
                   <li>20 Tagesimpulse (Mo–Fr) anwählbar</li>
                   <li>Mediathek mit 4 Videos+Podcastfolgen</li>
                   <li>Details mit 4 Infografiken + Vertiefungen</li>
-                  <li>Team-/Kalenderfunktionen (iCal)</li>
+                  <li>Team-/Kalenderfunktionen anpassbar (iCal)</li>
                   <li>Notizfunktion mit Druckausgabe</li><br />
                   <div className="text-base font-semibold text-white">
                     frei zum dauerhaften Testen<br />
@@ -187,7 +187,7 @@ export default function VersionPage() {
                   <div className="font-semibold text-white">je nach Lizenz:</div>
                   <li>Mediathek mit 41 Videos+Podcastfolgen</li>
                   <li>Details mit 41 Infografiken + Vertiefungen</li>
-                  <li>Team-/Kalenderfunktionen (iCal)</li>
+                  <li>Team-/Kalenderfunktionen anpassbar (iCal)</li>
                   <li>Notizfunktion mit Druckausgabe</li>
                 </ul>
               </div>

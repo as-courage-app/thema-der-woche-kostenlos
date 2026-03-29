@@ -153,18 +153,20 @@ export default function StartPage() {
 
             <div className="mt-4 space-y-3 text-sm text-slate-700">
               <p>
-                In der kostenlosen Version sind die <span className="font-semibold text-slate-900">ersten vier Themen</span> frei. Sie können sie direkt ausprobieren und die Grundstruktur der App kennenlernen.
+                In der <span className="font-semibold text-slate-900">kostenlosen Version</span>  sind die <span className="font-semibold text-slate-900">ersten vier Themen</span> frei. Sie können sie direkt ausprobieren und die Grundstruktur der App kennenlernen.
                 Über die <span className="font-semibold text-slate-900">Themenauswahl</span> stellen Sie die
                 Themen zusammen. Sie können über <span className="font-semibold text-slate-900">Anzahl Wochen</span> gleichzeitig zwei Themen  <span className="font-semibold text-slate-900">manuell</span> oder
                 per <span className="font-semibold text-slate-900">Zufall</span> auswählen. Die Reihenfolge der Themen kann über Pfeiltasten
                 frei festgelegt werden.
               </p>
-
+              
+                In den <span className="font-semibold text-slate-900">Vollversionen</span> stehen viele weitere Funktionen zur Verfügung.<br />
+              <br />
               <p>
                 Der <span className="font-semibold text-slate-900">Info-Button</span>{' '} oben rechts unter
                 dem Logo begleitet Sie dauerhaft sichtbar durch die App und erklärt bei Bedarf wichtige Funktionen auf einen Blick.
                 Über den <span className="font-semibold text-slate-900">orangenen Upgrade-Button</span>{' '}
-                gelangen Sie jederzeit bequem zur Anmeldung für die Vollversionen mit erweitertem Umfang.
+                gelangen Sie jederzeit bequem zur Anmeldung für die Vollversionen.
               </p>
 
               <div className="text-sm text-slate-700">
@@ -177,7 +179,7 @@ export default function StartPage() {
                 <img
                   src="/images/Unterschrift-as-transparent.png"
                   alt="Unterschrift von Andreas Sedlag"
-                  className="block h-16 w-auto"
+                  className="block h-20 w-auto"
                 />
                 <span className="mt-1 block">
                   Andreas Sedlag, Kompetenztrainer, Theaterpädagoge und systemischer Coach
@@ -187,6 +189,6 @@ export default function StartPage() {
           </div>
         </section>
       </main>
-    </BackgroundLayout>
+    </BackgroundLayout >
   );
 }
