@@ -390,7 +390,7 @@ export default function QuotesPage() {
     <AuthWrapper>
       <BackgroundLayout activeThemeId={current?.id}>
         <div className="mx-auto flex h-full min-h-[100svh] lg:min-h-0 max-w-6xl px-10 py-3">
-          <div className="w-full max-h-none rounded-none sm:rounded-2xl bg-white/98 sm:bg-white/85 shadow-none sm:shadow-xl backdrop-blur-md min-h-[100dvh] sm:min-h-0 overflow-visible flex flex-col">
+          <div className="w-full max-h-none rounded-none border border-[#F29420] sm:rounded-2xl bg-white/98 sm:bg-white/85 shadow-none sm:shadow-xl backdrop-blur-md min-h-[100dvh] sm:min-h-0 overflow-visible flex flex-col">
             {/* Kopf */}
             <div className="p-5 sm:p-7 shrink-0">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -431,7 +431,7 @@ export default function QuotesPage() {
                     <button
                       type="button"
                       onClick={() => router.push('/themes')}
-                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[#F29420] bg-[#F29420] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#E4891E] hover:bg-[#E4891E] hover:shadow-lg cursor-pointer"
+                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[#4EA72E] bg-[#4EA72E] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-lg cursor-pointer"
                     >
                       zurück zur Themenauswahl
                     </button>
@@ -466,7 +466,7 @@ export default function QuotesPage() {
                   className={[
                     'min-h-[44px] rounded-xl px-4 py-2 text-sm font-medium border shadow-sm transition duration-200',
                     canPrev
-                      ? 'border-slate-900 bg-slate-900 text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-black hover:border-black hover:shadow-lg cursor-pointer'
+                      ? 'border-[#4EA72E] bg-[#4EA72E] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#3f8a25] hover:border-[#3f8a25] hover:shadow-lg cursor-pointer'
                       : 'border-slate-200 bg-white text-slate-400 cursor-not-allowed',
                   ].join(' ')}
                 >
@@ -480,7 +480,7 @@ export default function QuotesPage() {
                   className={[
                     'min-h-[44px] rounded-xl px-4 py-2 text-sm font-medium border shadow-sm transition duration-200',
                     canNext
-                      ? 'border-slate-900 bg-slate-900 text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-black hover:border-black hover:shadow-lg cursor-pointer'
+                      ? 'border-[#4EA72E] bg-[#4EA72E] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#3f8a25] hover:border-[#3f8a25] hover:shadow-lg cursor-pointer'
                       : 'border-slate-200 bg-white text-slate-400 cursor-not-allowed',
                   ].join(' ')}
                 >
@@ -597,11 +597,11 @@ export default function QuotesPage() {
                             className="mt-3 sticky top-0 z-10 rounded-xl border-2 bg-slate-50 p-4 shadow-sm"
                             style={{ borderColor: BRAND_ORANGE }}
                           >
-                            <div className="text-sm font-semibold tracking-wide text-slate-900">Wochenzitat</div>
+                            <div className="text-lg font-semibold tracking-wide text-slate-900">Wochenzitat</div>
                             <div className="mt-2 text-lg leading-relaxed text-slate-900">„{current.quote}“</div>
                           </div>
 
-                          <div className="mt-4 flex flex-wrap gap-2">
+                          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-5">
                             {WEEKDAYS.map((d) => (
                               <button
                                 key={d.key}
@@ -613,23 +613,23 @@ export default function QuotesPage() {
                                   }))
                                 }
                                 className={[
-                                  'rounded-full px-3 py-1.5 text-xs border shadow-sm transition duration-200 cursor-pointer',
+                                  'w-full rounded-2xl px-3 py-2 text-sm border shadow-sm transition duration-200 cursor-pointer',
                                   dayIndex === d.index
-                                    ? 'bg-slate-900 text-white border-slate-900 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-black hover:border-black hover:shadow-md'
+                                    ? 'bg-[#4EA72E] text-white border-[#4EA72E] hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#3f8a25] hover:border-[#3f8a25] hover:shadow-md'
                                     : 'bg-white text-slate-700 border-slate-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-slate-50 hover:border-slate-300 hover:shadow-md',
                                 ].join(' ')}
                               >
                                 <span className="flex flex-col items-center leading-tight">
-                                  <span>{d.key}</span>
-                                  <span className="text-[10px] opacity-80">{weekdayDateText(d.index)}</span>
+                                  <span className="font-medium">{d.key}</span>
+                                  <span className="text-xs opacity-80">{weekdayDateText(d.index)}</span>
                                 </span>
                               </button>
                             ))}
                           </div>
 
-                          <div className="mt-3 rounded-xl border-2 border-[#F29420] bg-slate-50 p-4">
-                            <div className="text-sm font-medium text-slate-800">{WEEKDAYS[dayIndex].label}</div>
-                            <div className="mt-1 text-sm text-slate-900 leading-relaxed">
+                          <div className="mt-3 rounded-xl border-2 border-[#F29420] bg-slate-50 p-5">
+                            <div className="text-lg font-semibold text-slate-900">{WEEKDAYS[dayIndex].label}</div>
+                            <div className="mt-2 text-lg leading-relaxed text-slate-900">
                               {current.questions?.[dayIndex] ?? '—'}
                             </div>
                           </div>
@@ -642,7 +642,10 @@ export default function QuotesPage() {
 
                   {showNotes && current?.id ? (
                     <div className="mt-5">
-                      <EmbeddedNotesHistoryCard themeId={current.id} />
+                      <EmbeddedNotesHistoryCard
+                        themeId={current.id}
+                        onClose={() => setShowNotes(false)}
+                      />
                     </div>
                   ) : null}
                 </>

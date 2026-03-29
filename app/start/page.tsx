@@ -81,7 +81,7 @@ export default function StartPage() {
 
   return (
     <BackgroundLayout>
-      <main className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
+      <main className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6">
         <section className="rounded-2xl border border-[#F29420] bg-white/85 p-6 shadow-xl backdrop-blur-md">
           {/* Kopfzeile: Titel links, Schalt-Buttons rechts */}
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -95,22 +95,26 @@ export default function StartPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:flex-nowrap sm:items-center sm:justify-end">
               <Link
                 href="/version"
-                className="cursor-pointer rounded-xl bg-white/90 px-3 py-2 text-sm font-semibold text-slate-900 shadow-md ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-xl hover:ring-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
+                className="cursor-pointer whitespace-nowrap rounded-xl bg-white/90 px-3 py-2 text-center text-sm font-semibold text-slate-900 shadow-md ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-xl hover:ring-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
               >
                 zurück
               </Link>
 
               {canUseThemesSetup ? (
                 <>
-                  <Link href="/themes" className={topBtnEnabled} title="Zur Themenübersicht">
-                    Themenauswahl
+                  <Link
+                    href="/themes"
+                    className="cursor-pointer whitespace-nowrap rounded-xl bg-[#4EA72E] px-4 py-2 text-center text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#3f8a25] hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4EA72E]"
+                    title="Zur Themenübersicht"
+                  >
+                    Zur Themenauswahl
                   </Link>
                   <Link
                     href="https://thema-der-woche.vercel.app/account"
-                    className="rounded-xl bg-[#F29420] px-4 py-2 text-sm text-slate-900 shadow-md transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-xl"
+                    className="whitespace-nowrap rounded-xl bg-[#F29420] px-4 py-2 text-center text-sm font-semibold text-slate-900 shadow-md transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-xl"
                     title="Zum Update"
                   >
                     zum upgrade
@@ -118,10 +122,10 @@ export default function StartPage() {
                 </>
               ) : (
                 <>
-                  <span className={topBtnDisabled} aria-disabled="true" title="Bitte erst anmelden">
-                    Themenauswahl
+                  <span className={`${topBtnDisabled} whitespace-nowrap text-center`} aria-disabled="true" title="Bitte erst anmelden">
+                    Zur Themenauswahl
                   </span>
-                  <span className={topBtnDisabled} aria-disabled="true" title="Bitte erst anmelden">
+                  <span className={`${topBtnDisabled} whitespace-nowrap text-center`} aria-disabled="true" title="Bitte erst anmelden">
                     zum upgrade
                   </span>
                 </>

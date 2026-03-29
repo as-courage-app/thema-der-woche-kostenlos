@@ -579,7 +579,7 @@ export default function ThemesPage() {
                   <button
                     type="button"
                     onClick={onContinue}
-                    className="inline-flex h-[48px] items-center rounded-xl border border-[#F29420] bg-[#F29420] px-5 py-0 text-sm font-medium text-white transition hover:bg-[#E4891E]"
+                    className="inline-flex h-[48px] items-center rounded-xl border border-[#4EA72E] bg-[#4EA72E] px-5 py-0 text-sm font-medium text-white transition hover:bg-[#3f8a25]"
                   >
                     Weiter
                   </button>
@@ -824,7 +824,7 @@ export default function ThemesPage() {
                   <button
                     type="button"
                     onClick={onContinue}
-                    className="inline-flex h-[48px] items-center rounded-xl border border-[#F29420] bg-[#F29420] px-5 py-0 text-sm font-medium text-white transition hover:bg-[#E4891E]"
+                    className="inline-flex h-[48px] items-center rounded-xl border border-[#4EA72E] bg-[#4EA72E] px-5 py-0 text-sm font-medium text-white transition hover:bg-[#3f8a25]"
                   >
                     Weiter
                   </button>
