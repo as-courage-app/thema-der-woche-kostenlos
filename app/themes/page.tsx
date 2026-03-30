@@ -129,7 +129,6 @@ export default function ThemesPage() {
   const router = useRouter();
 
   const [appMode, setAppMode] = useState<'free' | 'full' | null>(null);
-  const [icalPref, setIcalPref] = useState(false);
   const [mode, setMode] = useState<Mode>('manual');
   const [weeksCount, setWeeksCount] = useState<number>(1);
   const [startMonday, setStartMonday] = useState<string>(nextMondayISO());
@@ -181,7 +180,6 @@ export default function ThemesPage() {
       if (wc && wc >= 1) setWeeksCount(Math.min(upperWeeks, Math.max(1, wc)));
       if (typeof setup.startMonday === 'string' && setup.startMonday.length === 10) setStartMonday(setup.startMonday);
       if (setup.mode === 'manual' || setup.mode === 'random') setMode(setup.mode);
-      setIcalPref(Boolean(setup.icalEnabled));
     }
 
     const usedRaw = readLS<unknown>(LS.usedThemes, []);
@@ -206,7 +204,7 @@ export default function ThemesPage() {
 
       const next = {
         ...prev,
-        icalEnabled: icalPref,
+        icalEnabled: true,
         weeksCount,
         startMonday,
       };
@@ -215,7 +213,7 @@ export default function ThemesPage() {
     } catch {
       // ignorieren
     }
-  }, [setupLoaded, icalPref, weeksCount, startMonday]);
+  }, [setupLoaded, weeksCount, startMonday]);
 
   useEffect(() => {
     if (!selectionLoaded) return;
@@ -316,6 +314,7 @@ export default function ThemesPage() {
       startMonday,
       mode,
       themeIds: selectedThemes,
+      icalEnabled: true,
       createdAt: new Date().toISOString(),
     };
     writeLS(LS.setup, setup);
@@ -377,26 +376,6 @@ export default function ThemesPage() {
                     >
                       zum upgrade
                     </Link>
-
-                    <label
-                      className={[
-                        'flex cursor-pointer items-start gap-2 rounded-xl px-3 py-2 text-xs text-slate-900',
-                        icalPref ? 'border border-[#F29420] bg-orange-100' : 'border border-orange-200 bg-orange-50',
-                      ].join(' ')}
-                    >
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#F29420]"
-                        checked={icalPref}
-                        onChange={(e) => setIcalPref(e.target.checked)}
-                      />
-                      <span className="leading-5">
-                        iCal aktivieren
-                        <span className="block text-[11px] text-slate-700">
-                          Download später bei „Zitate &amp; Tagesimpulse“
-                        </span>
-                      </span>
-                    </label>
                   </div>
                 </div>
               </header>

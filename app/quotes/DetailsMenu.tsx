@@ -62,6 +62,9 @@ export default function DetailsMenu({ themeId }: DetailsMenuProps) {
       >
         <span aria-hidden="true" className="text-base leading-none">❗</span>
         Details
+        <span aria-hidden="true" className="text-xs leading-none">
+          {open ? '▲' : '▼'}
+        </span>
       </button>
 
       {open ? (

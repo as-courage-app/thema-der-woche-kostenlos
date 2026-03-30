@@ -63,6 +63,9 @@ export default function MediathekMenu({
       >
         <span aria-hidden="true" className="text-base leading-none">🎞️</span>
         Mediathek
+        <span aria-hidden="true" className="text-xs leading-none">
+          {open ? '▲' : '▼'}
+        </span>
       </button>
 
       {open ? (

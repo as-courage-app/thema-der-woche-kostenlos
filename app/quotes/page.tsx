@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { readCurrentUserPlan } from '@/lib/userPlan';
 import BackgroundLayout from '../../components/BackgroundLayout';
 import DetailsMenu from './DetailsMenu';
 import edition1 from '../data/edition1.json';
@@ -15,6 +14,7 @@ import MediathekMenu from './MediathekMenu';
 import { EmbeddedNotesHistoryCard } from '@/components/notes/NotesHistoryCard';
 
 const LS_SETUP = 'as-courage.themeSetup.v1';
+const ICAL_EDITOR_ROUTE = '/ical-editor';
 
 type EditionRow = {
   id: string;
@@ -23,8 +23,6 @@ type EditionRow = {
   questions: string[];
 };
 
-type LicenseTier = 'A' | 'B' | 'C';
-
 type SetupState = {
   edition?: number;
   weeksCount?: number;
@@ -32,14 +30,10 @@ type SetupState = {
   mode?: 'manual' | 'random';
   themeIds?: string[];
   createdAt?: string;
-
-  // ✅ neu: für A/B/C-Logik (robust: akzeptiert alten + neuen Feldnamen)
-  selectedLicenseTier?: LicenseTier;
-  licenseTier?: LicenseTier;
-
-  // ✅ neu: iCal Haken
   icalEnabled?: boolean;
 };
+
+type BottomSectionKey = 'notes' | 'ical';
 
 const THEMES: EditionRow[] = edition1 as unknown as EditionRow[];
 
@@ -56,8 +50,8 @@ const WEEKDAYS = [
 function readSetup(): SetupState | null {
   try {
     const possibleKeys = [
-      LS_SETUP, // as-courage.themeSetup.v1
-      'as-courage.themeSetup', // ältere Variante
+      LS_SETUP,
+      'as-courage.themeSetup',
       'themeSetup',
       'setup',
       'as-courage.setup.v1',
@@ -98,9 +92,9 @@ function formatDE(date: Date): string {
 
 function prettifyId(id: string): string {
   const cleaned = id
-    .replace(/^ed\d+-\d+-/i, '') // Ed1-01-
-    .replace(/^ed\d+\s*/i, '') // Ed1
-    .replace(/^\d+-/, '') // 01-
+    .replace(/^ed\d+-\d+-/i, '')
+    .replace(/^ed\d+\s*/i, '')
+    .replace(/^\d+-/, '')
     .replace(/-/g, ' ')
     .trim();
 
@@ -112,7 +106,6 @@ function displayTitle(row: EditionRow): string {
   return t && t.length > 0 ? t : prettifyId(row.id);
 }
 
-/** ✅ Download-Helfer */
 function downloadTextFile(filename: string, content: string, mime = 'text/plain;charset=utf-8') {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
@@ -125,7 +118,6 @@ function downloadTextFile(filename: string, content: string, mime = 'text/plain;
   URL.revokeObjectURL(url);
 }
 
-/** ✅ Minimal gültige ICS (Platzhalter) – echte Inhalte bauen wir als nächsten Schritt */
 function pad2(n: number) {
   return String(n).padStart(2, '0');
 }
@@ -153,12 +145,6 @@ function dtstampUtc() {
   return `${y}${m}${d}T${hh}${mm}${ss}Z`;
 }
 
-/**
- * ✅ Erzeugt eine echte ICS-Datei nach deinen Regeln:
- * - ganztägig
- * - Mo–Fr: Thema + Zitat + Tagesfrage
- * - Sa/So: "Schönes Wochenende"
- */
 function buildIcsFromPlan(setup: SetupState | null, selectedThemes: EditionRow[]): string {
   const stamp = dtstampUtc();
   const uidBase = `tdw-${stamp}-${Math.random().toString(16).slice(2)}`;
@@ -179,7 +165,6 @@ function buildIcsFromPlan(setup: SetupState | null, selectedThemes: EditionRow[]
     ].join('\r\n');
   }
 
-  // Begrenzung: nicht mehr Wochen exportieren als Themen vorhanden sind
   const countWeeks = Math.min(weeksCount, selectedThemes.length);
 
   const lines: string[] = [
@@ -198,7 +183,6 @@ function buildIcsFromPlan(setup: SetupState | null, selectedThemes: EditionRow[]
     const title = displayTitle(theme);
     const quote = theme.quote ?? '';
 
-    // Mo–Fr
     for (let day = 0; day < 5; day++) {
       const date = addDays(weekMonday, day);
       const dtStart = yyyymmdd(date);
@@ -221,7 +205,6 @@ function buildIcsFromPlan(setup: SetupState | null, selectedThemes: EditionRow[]
       eventIndex++;
     }
 
-    // Sa/So
     for (let day = 5; day < 7; day++) {
       const date = addDays(weekMonday, day);
       const dtStart = yyyymmdd(date);
@@ -245,55 +228,149 @@ function buildIcsFromPlan(setup: SetupState | null, selectedThemes: EditionRow[]
   return lines.join('\r\n');
 }
 
+type IcalMenuProps = {
+  onDownload: () => void;
+  onEdit: () => void;
+};
+
+function IcalMenu({ onDownload, onEdit }: IcalMenuProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function handleWindowFocus() {
+      setOpen(false);
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, []);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg cursor-pointer"
+        title="iCal öffnen"
+      >
+        <span aria-hidden="true" className="text-base leading-none">📅</span>
+        iCal
+        <span aria-hidden="true" className="text-xs leading-none">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open ? (
+        <div className="absolute left-0 top-full z-30 mt-2 w-[260px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onDownload();
+            }}
+            className="flex w-full items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm text-slate-900 transition hover:bg-slate-50 cursor-pointer"
+          >
+            <span>iCal direkt herunterladen</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onEdit();
+            }}
+            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm text-slate-900 transition hover:bg-slate-50 cursor-pointer"
+          >
+            <span>iCal bearbeiten</span>
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function QuotesPage() {
   const router = useRouter();
   const [setup, setSetup] = useState<SetupState | null>(null);
-  const [currentUserPlan, setCurrentUserPlan] = useState<'A' | 'B' | 'C' | null>(null);
   const [activeDay, setActiveDay] = useState<Record<string, number>>({});
   const [pageIndex, setPageIndex] = useState<number>(0);
   const [appMode, setAppMode] = useState<'free' | 'full' | null>(null);
   const isFree = appMode === 'free';
   const AuthWrapper = appMode === 'full' ? RequireAuth : React.Fragment;
 
-  // Fallback: wenn themes/<id>.jpg fehlt -> demo.jpg
   const [imgFallbackToDemo, setImgFallbackToDemo] = useState<boolean>(false);
+  const [showPodcast, setShowPodcast] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
+  const [showInlineIcal, setShowInlineIcal] = useState(false);
+  const [podcastNotice, setPodcastNotice] = useState<string | null>(null);
+  const [bottomSectionOrder, setBottomSectionOrder] = useState<BottomSectionKey[]>([]);
+  const notesBlockRef = useRef<HTMLDivElement | null>(null);
+  const icalBlockRef = useRef<HTMLDivElement | null>(null);
+  const pendingNotesScrollRef = useRef(false);
+  const pendingIcalScrollRef = useRef(false);
 
   useEffect(() => {
-    let alive = true;
+    const themeIdFromUrl = new URLSearchParams(window.location.search).get('themeId');
+    const s = readSetup();
+    const mode = getAppMode();
 
-    async function loadPageData() {
-      const themeIdFromUrl = new URLSearchParams(window.location.search).get('themeId');
-      const s = readSetup();
-      const plan = await readCurrentUserPlan();
-      const mode = getAppMode();
+    setSetup(s);
+    setAppMode(mode);
 
-      if (!alive) return;
+    const ids = s?.themeIds ?? [];
+    const initialDays: Record<string, number> = {};
+    for (const id of ids) initialDays[id] = 0;
+    setActiveDay(initialDays);
 
-      setSetup(s);
-      setAppMode(mode);
-      setCurrentUserPlan(plan);
-
-      console.log('TDW setup:', s);
-      console.log('TDW startMonday:', s?.startMonday);
-      console.log('TDW weeksCount:', s?.weeksCount);
-      console.log('TDW themeIds:', s?.themeIds);
-
-      const ids = s?.themeIds ?? [];
-      const initialDays: Record<string, number> = {};
-      for (const id of ids) initialDays[id] = 0;
-      setActiveDay(initialDays);
-
-      const initialIndex = themeIdFromUrl ? ids.findIndex((id) => id === themeIdFromUrl) : -1;
-      setPageIndex(initialIndex >= 0 ? initialIndex : 0);
-      setImgFallbackToDemo(false);
-    }
-
-    loadPageData();
-
-    return () => {
-      alive = false;
-    };
+    const initialIndex = themeIdFromUrl ? ids.findIndex((id) => id === themeIdFromUrl) : -1;
+    setPageIndex(initialIndex >= 0 ? initialIndex : 0);
+    setImgFallbackToDemo(false);
   }, []);
+
+  useEffect(() => {
+    if (!showNotes) return;
+    if (!pendingNotesScrollRef.current) return;
+
+    const node = notesBlockRef.current;
+    if (!node) return;
+
+    pendingNotesScrollRef.current = false;
+
+    requestAnimationFrame(() => {
+      node.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }, [showNotes]);
+
+  useEffect(() => {
+    if (!showInlineIcal) return;
+    if (!pendingIcalScrollRef.current) return;
+
+    const node = icalBlockRef.current;
+    if (!node) return;
+
+    pendingIcalScrollRef.current = false;
+
+    requestAnimationFrame(() => {
+      node.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }, [showInlineIcal]);
 
   const selectedThemes = useMemo(() => {
     const ids = setup?.themeIds;
@@ -309,15 +386,6 @@ export default function QuotesPage() {
   const clampedIndex = totalPages > 0 ? Math.min(pageIndex, totalPages - 1) : 0;
   const current: EditionRow | null = totalPages > 0 ? selectedThemes[clampedIndex] : null;
 
-  const [showPodcast, setShowPodcast] = useState(false);
-  const [showNotes, setShowNotes] = useState(false);
-  const [podcastNotice, setPodcastNotice] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
-
   const currentThemeNumber = useMemo(() => {
     const id = current?.id ?? '';
     const m = id.match(/-(\d{1,2})-/);
@@ -329,10 +397,8 @@ export default function QuotesPage() {
     return podcastEpisodes.find((ep) => ep.themeNumber === currentThemeNumber) ?? null;
   }, [currentThemeNumber]);
 
-  const licenseTier: LicenseTier | undefined = setup?.selectedLicenseTier ?? setup?.licenseTier;
-  const podcastAllowed = licenseTier === 'C' || (currentThemeNumber !== null && currentThemeNumber <= 4);
-  const podcastReady =
-    !!currentEpisode && currentThemeNumber !== null;
+  const podcastAllowed = currentThemeNumber !== null && currentThemeNumber <= 4;
+  const podcastReady = !!currentEpisode && currentThemeNumber !== null;
 
   const weekMondayDate = useMemo(() => {
     const base = parseIsoDate(setup?.startMonday);
@@ -341,14 +407,11 @@ export default function QuotesPage() {
   }, [setup?.startMonday, clampedIndex]);
 
   const weekdayDateText = useMemo(() => {
-    // liefert für Mo–Fr: "dd.mm.yyyy" passend zur aktuellen Woche
     if (!weekMondayDate) return (index: number) => '';
     return (index: number) => formatDE(addDays(weekMondayDate, index));
   }, [weekMondayDate]);
 
   const dateRangeText = useMemo(() => {
-
-
     const base = parseIsoDate(setup?.startMonday);
     if (!base) return '';
     const monday = addDays(base, clampedIndex * 7);
@@ -380,18 +443,23 @@ export default function QuotesPage() {
   }, [current, imgFallbackToDemo]);
 
   const currentTitle = current ? displayTitle(current) : '';
+  const showIcalButton = totalPages > 0;
 
-  // ✅ Button nur bei C + iCal-Haken (robust: alter/neuer Feldname)
-  const showIcalButton = useMemo(() => {
-    return Boolean(setup?.icalEnabled);
-  }, [currentUserPlan, setup]);
+  const orderedBottomSections = useMemo(() => {
+    return bottomSectionOrder.filter((section) => {
+      if (section === 'notes') return showNotes && !!current?.id;
+      if (section === 'ical') return showInlineIcal;
+      return false;
+    });
+  }, [bottomSectionOrder, showNotes, showInlineIcal, current?.id]);
+
+  const hasBottomSections = orderedBottomSections.length > 0;
 
   return (
     <AuthWrapper>
       <BackgroundLayout activeThemeId={current?.id}>
         <div className="mx-auto flex h-full min-h-[100svh] lg:min-h-0 max-w-6xl px-10 py-3">
           <div className="w-full max-h-none rounded-none border border-[#F29420] sm:rounded-2xl bg-white/98 sm:bg-white/85 shadow-none sm:shadow-xl backdrop-blur-md min-h-[100dvh] sm:min-h-0 overflow-visible flex flex-col">
-            {/* Kopf */}
             <div className="p-5 sm:p-7 shrink-0">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -406,23 +474,9 @@ export default function QuotesPage() {
 
                 <div className="flex w-full items-center justify-between gap-2 sm:w-auto">
                   <div className="flex flex-wrap gap-2">
-                    {showIcalButton && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const ics = buildIcsFromPlan(setup, selectedThemes);
-                          downloadTextFile('thema-der-woche.ics', ics, 'text/calendar;charset=utf-8');
-                        }}
-                        className="rounded-xl border border-[#F29420] bg-[#F29420] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#E4891E]"
-                        title="iCal-Datei herunterladen"
-                      >
-                        iCal herunterladen
-                      </button>
-                    )}
-
                     <Link
                       href="https://thema-der-woche.vercel.app/account"
-                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#F29420] px-4 py-2 text-sm text-slate-900 shadow-md transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-xl"
+                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#F29420] px-4 py-2 text-sm text-slate-900 shadow-md transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-xl cursor-pointer"
                       title="Zum Upgrade"
                     >
                       zum upgrade
@@ -435,13 +489,9 @@ export default function QuotesPage() {
                     >
                       zurück zur Themenauswahl
                     </button>
-
                   </div>
-
                 </div>
               </div>
-
-              {/* Navigation */}
 
               {podcastNotice ? (
                 <div className="mt-3 inline-block max-w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -486,6 +536,7 @@ export default function QuotesPage() {
                 >
                   weiter
                 </button>
+
                 <MediathekMenu
                   themeId={current?.id}
                   podcastAllowed={podcastAllowed}
@@ -493,7 +544,7 @@ export default function QuotesPage() {
                   onPodcastClick={() => {
                     setPodcastNotice(null);
                     if (!podcastAllowed) {
-                      setPodcastNotice('Podcast nur in Variante C verfügbar.');
+                      setPodcastNotice('Podcast nur für die ersten 4 Themen verfügbar.');
                       return;
                     }
                     if (!podcastReady) {
@@ -506,14 +557,44 @@ export default function QuotesPage() {
 
                 <DetailsMenu themeId={current?.id} />
 
+                {showIcalButton ? (
+                  <IcalMenu
+                    onDownload={() => {
+                      const ics = buildIcsFromPlan(setup, selectedThemes);
+                      downloadTextFile('thema-der-woche.ics', ics, 'text/calendar;charset=utf-8');
+                    }}
+                    onEdit={() => {
+                      pendingIcalScrollRef.current = true;
+                      setBottomSectionOrder((prev) =>
+                        prev.includes('ical') ? prev : [...prev, 'ical']
+                      );
+                      setShowInlineIcal(true);
+                    }}
+                  />
+                ) : null}
 
                 <button
                   type="button"
-                  onClick={() => setShowNotes((value) => !value)}
+                  onClick={() => {
+                    if (!showNotes) {
+                      pendingNotesScrollRef.current = true;
+                      setBottomSectionOrder((prev) =>
+                        prev.includes('notes') ? prev : [...prev, 'notes']
+                      );
+                      setShowNotes(true);
+                      return;
+                    }
+
+                    pendingNotesScrollRef.current = false;
+                    setShowNotes(false);
+                    setBottomSectionOrder((prev) =>
+                      prev.filter((entry) => entry !== 'notes')
+                    );
+                  }}
                   className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg cursor-pointer"
                   title="Notizen einblenden oder ausblenden"
                 >
-                  <span aria-hidden="true" className="text-base leading-none">📝</span>{' '}
+                  <span aria-hidden="true" className="text-base leading-none">📝</span>
                   {showNotes ? 'Notizen ausblenden' : 'Notizen einblenden'}
                 </button>
 
@@ -521,12 +602,6 @@ export default function QuotesPage() {
                   {totalPages > 0 ? (
                     <>
                       Thema <span className="font-semibold">{clampedIndex + 1}</span> / {totalPages}
-                      {dateRangeText ? (
-                        <>
-                          <span className="mx-2 text-slate-300">|</span>
-                          <span className="font-medium">{dateRangeText}</span>
-                        </>
-                      ) : null}
                     </>
                   ) : (
                     <span className="text-slate-600">Noch keine Themen ausgewählt.</span>
@@ -555,8 +630,13 @@ export default function QuotesPage() {
               />
             ) : null}
 
-            {/* Split-Bereich */}
-            <div className={showNotes ? 'px-5 pb-5 sm:px-7 sm:pb-7' : 'flex-1 min-h-0 overflow-auto lg:overflow-hidden px-5 pb-5 sm:px-7 sm:pb-7'}>
+            <div
+              className={
+                hasBottomSections
+                  ? 'px-5 pb-5 sm:px-7 sm:pb-7'
+                  : 'flex-1 min-h-0 overflow-auto lg:overflow-hidden px-5 pb-5 sm:px-7 sm:pb-7'
+              }
+            >
               {!current ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                   Ich finde noch keine ausgewählten Themen. Bitte gehe zur Themenauswahl und wähle Themen aus.
@@ -565,13 +645,12 @@ export default function QuotesPage() {
                 <>
                   <div
                     className={
-                      showNotes
+                      hasBottomSections
                         ? 'rounded-2xl border border-slate-200 bg-white'
                         : 'rounded-2xl border border-slate-200 bg-white lg:h-full lg:overflow-hidden'
                     }
                   >
                     <div className="flex flex-col lg:flex-row">
-                      {/* LINKS: Bild */}
                       <div className="relative lg:w-1/2 bg-slate-100">
                         <div className="h-64 lg:h-full">
                           <img
@@ -583,7 +662,6 @@ export default function QuotesPage() {
                         </div>
                       </div>
 
-                      {/* RECHTS: Inhalt */}
                       <div className="lg:w-1/2 lg:h-full lg:overflow-auto">
                         <div className="p-5 lg:p-6">
                           <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -640,20 +718,142 @@ export default function QuotesPage() {
                     </div>
                   </div>
 
-                  {showNotes && current?.id ? (
-                    <div className="mt-5">
-                      <EmbeddedNotesHistoryCard
-                        themeId={current.id}
-                        onClose={() => setShowNotes(false)}
-                      />
-                    </div>
-                  ) : null}
+                  {orderedBottomSections.map((section) => {
+                    if (section === 'notes' && current?.id) {
+                      return (
+                        <div key="notes" ref={notesBlockRef} className="mt-5">
+                          <EmbeddedNotesHistoryCard
+                            themeId={current.id}
+                            onClose={() => {
+                              pendingNotesScrollRef.current = false;
+                              setShowNotes(false);
+                              setBottomSectionOrder((prev) =>
+                                prev.filter((entry) => entry !== 'notes')
+                              );
+                            }}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (section === 'ical') {
+                      return (
+                        <div
+                          key="ical"
+                          ref={icalBlockRef}
+                          className="mt-5 rounded-2xl border border-[#F29420] bg-white p-5 shadow-sm"
+                        >
+                          <div className="flex flex-col gap-4">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <h3 className="text-lg font-semibold text-slate-900">iCal-Bereich</h3>
+                                <p className="mt-2 text-sm leading-relaxed text-slate-700">
+                                  Dieser Bereich ist jetzt direkt unterhalb der Quotes-Seite vorbereitet.
+                                  Der vollständige iCal-Editor bleibt vorerst noch auf seiner eigenen Seite.
+                                </p>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const ics = buildIcsFromPlan(setup, selectedThemes);
+                                    downloadTextFile(
+                                      'thema-der-woche.ics',
+                                      ics,
+                                      'text/calendar;charset=utf-8'
+                                    );
+                                  }}
+                                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg cursor-pointer"
+                                >
+                                  iCal direkt herunterladen
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(ICAL_EDITOR_ROUTE)}
+                                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#F29420] px-4 py-2 text-sm font-medium text-slate-900 shadow-md transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-xl cursor-pointer"
+                                >
+                                  iCal-Editor öffnen
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    pendingIcalScrollRef.current = false;
+                                    setShowInlineIcal(false);
+                                    setBottomSectionOrder((prev) =>
+                                      prev.filter((entry) => entry !== 'ical')
+                                    );
+                                  }}
+                                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg cursor-pointer"
+                                >
+                                  iCal ausblenden
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                <div className="text-sm font-semibold text-slate-900">Aktuelles Thema</div>
+                                <div className="mt-1 text-sm leading-relaxed text-slate-700">
+                                  {currentTitle || '—'}
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                <div className="text-sm font-semibold text-slate-900">Aktuelle Woche</div>
+                                <div className="mt-1 text-sm leading-relaxed text-slate-700">
+                                  {dateRangeText || '—'}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                              <div className="text-sm font-semibold text-slate-900">
+                                Vorschau der Kalendereinträge
+                              </div>
+
+                              <div className="mt-3 space-y-2">
+                                {WEEKDAYS.map((day) => (
+                                  <div
+                                    key={day.key}
+                                    className="rounded-xl border border-slate-200 bg-white px-3 py-3"
+                                  >
+                                    <div className="text-sm font-semibold text-slate-900">
+                                      {day.label} <span className="font-normal text-slate-500">({weekdayDateText(day.index)})</span>
+                                    </div>
+                                    <div className="mt-1 text-sm leading-relaxed text-slate-700">
+                                      {current?.questions?.[day.index] ?? '—'}
+                                    </div>
+                                  </div>
+                                ))}
+
+                                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                                  <div className="text-sm font-semibold text-slate-900">Samstag</div>
+                                  <div className="mt-1 text-sm leading-relaxed text-slate-700">
+                                    Schönes Wochenende
+                                  </div>
+                                </div>
+
+                                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                                  <div className="text-sm font-semibold text-slate-900">Sonntag</div>
+                                  <div className="mt-1 text-sm leading-relaxed text-slate-700">
+                                    Schönes Wochenende
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return null;
+                  })}
                 </>
               )}
             </div>
-
-            {/* Footer */}
-            {/* Footer */}
           </div>
         </div>
       </BackgroundLayout>
