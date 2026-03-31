@@ -14,6 +14,7 @@ import MediathekMenu from './MediathekMenu';
 import { EmbeddedNotesHistoryCard } from '@/components/notes/NotesHistoryCard';
 
 const LS_SETUP = 'as-courage.themeSetup.v1';
+const LS_INLINE_ICAL_DRAFTS = 'as-courage.inlineIcalDrafts.v1';
 const ICAL_EDITOR_ROUTE = '/ical-editor';
 
 type EditionRow = {
@@ -35,6 +36,28 @@ type SetupState = {
 
 type BottomSectionKey = 'notes' | 'ical';
 
+type EditableDayKey = 'Mo' | 'Di' | 'Mi' | 'Do' | 'Fr' | 'Sa' | 'So';
+
+type InlineIcalWeekDraft = {
+  themeId: string;
+  weekIndex: number;
+  startMondayIso: string;
+  savedAt: string;
+  days: Record<EditableDayKey, string>;
+};
+
+type InlineIcalDraftMap = Record<string, InlineIcalWeekDraft>;
+
+type InlineIcalDayRow = {
+  key: EditableDayKey;
+  label: string;
+  index: number;
+  dateIso: string;
+  dateText: string;
+  text: string;
+  defaultText: string;
+};
+
 const THEMES: EditionRow[] = edition1 as unknown as EditionRow[];
 
 const BRAND_ORANGE = '#F3910A';
@@ -45,6 +68,16 @@ const WEEKDAYS = [
   { key: 'Mi', label: 'Mittwoch', index: 2 },
   { key: 'Do', label: 'Donnerstag', index: 3 },
   { key: 'Fr', label: 'Freitag', index: 4 },
+];
+
+const EDITABLE_DAYS: Array<{ key: EditableDayKey; label: string; index: number }> = [
+  { key: 'Mo', label: 'Montag', index: 0 },
+  { key: 'Di', label: 'Dienstag', index: 1 },
+  { key: 'Mi', label: 'Mittwoch', index: 2 },
+  { key: 'Do', label: 'Donnerstag', index: 3 },
+  { key: 'Fr', label: 'Freitag', index: 4 },
+  { key: 'Sa', label: 'Samstag', index: 5 },
+  { key: 'So', label: 'Sonntag', index: 6 },
 ];
 
 function readSetup(): SetupState | null {
@@ -71,10 +104,37 @@ function readSetup(): SetupState | null {
   }
 }
 
+function readInlineIcalDrafts(): InlineIcalDraftMap {
+  try {
+    const raw = localStorage.getItem(LS_INLINE_ICAL_DRAFTS);
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw) as InlineIcalDraftMap;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeInlineIcalDrafts(drafts: InlineIcalDraftMap) {
+  try {
+    localStorage.setItem(LS_INLINE_ICAL_DRAFTS, JSON.stringify(drafts));
+  } catch {
+    // bewusst still
+  }
+}
+
 function parseIsoDate(iso?: string): Date | null {
   if (!iso || iso.length !== 10) return null;
   const d = new Date(iso + 'T00:00:00');
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatIsoDate(date: Date): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function addDays(date: Date, days: number): Date {
@@ -145,7 +205,37 @@ function dtstampUtc() {
   return `${y}${m}${d}T${hh}${mm}${ss}Z`;
 }
 
-function buildIcsFromPlan(setup: SetupState | null, selectedThemes: EditionRow[]): string {
+function buildWeekDraftStorageKey(themeId: string, weekIndex: number, startMondayIso: string) {
+  return `${startMondayIso}__${weekIndex}__${themeId}`;
+}
+
+function buildInlineIcalRows(
+  theme: EditionRow,
+  weekMonday: Date,
+  savedDraft?: InlineIcalWeekDraft
+): InlineIcalDayRow[] {
+  return EDITABLE_DAYS.map((day) => {
+    const currentDate = addDays(weekMonday, day.index);
+    const defaultText =
+      day.index <= 4 ? theme.questions?.[day.index] ?? '' : 'Schönes Wochenende';
+
+    return {
+      key: day.key,
+      label: day.label,
+      index: day.index,
+      dateIso: formatIsoDate(currentDate),
+      dateText: formatDE(currentDate),
+      text: savedDraft?.days?.[day.key] ?? defaultText,
+      defaultText,
+    };
+  });
+}
+
+function buildIcsFromPlan(
+  setup: SetupState | null,
+  selectedThemes: EditionRow[],
+  inlineDrafts: InlineIcalDraftMap
+): string {
   const stamp = dtstampUtc();
   const uidBase = `tdw-${stamp}-${Math.random().toString(16).slice(2)}`;
 
@@ -153,7 +243,7 @@ function buildIcsFromPlan(setup: SetupState | null, selectedThemes: EditionRow[]
   const startIso = setup?.startMonday;
 
   const baseDate = parseIsoDate(startIso);
-  if (!baseDate || weeksCount < 1 || selectedThemes.length === 0) {
+  if (!baseDate || weeksCount < 1 || selectedThemes.length === 0 || !startIso) {
     return [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
@@ -182,15 +272,23 @@ function buildIcsFromPlan(setup: SetupState | null, selectedThemes: EditionRow[]
     const weekMonday = addDays(baseDate, w * 7);
     const title = displayTitle(theme);
     const quote = theme.quote ?? '';
+    const draftKey = buildWeekDraftStorageKey(theme.id, w, startIso);
+    const savedDraft = inlineDrafts[draftKey];
+    const weekRows = buildInlineIcalRows(theme, weekMonday, savedDraft);
 
-    for (let day = 0; day < 5; day++) {
-      const date = addDays(weekMonday, day);
-      const dtStart = yyyymmdd(date);
-      const dtEnd = yyyymmdd(addDays(date, 1));
+    for (const row of weekRows) {
+      const currentDate = addDays(weekMonday, row.index);
+      const dtStart = yyyymmdd(currentDate);
+      const dtEnd = yyyymmdd(addDays(currentDate, 1));
+      const text = row.text?.trim() || row.defaultText;
 
-      const question = theme.questions?.[day] ?? '';
-      const summary = `${title}: ${question || 'Tagesimpuls'}`;
-      const desc = `Thema: ${title}\nZitat: ${quote}\nTagesfrage: ${question}`;
+      const summary =
+        row.index <= 4 ? `${title}: ${text || 'Tagesimpuls'}` : text || 'Schönes Wochenende';
+
+      const desc =
+        row.index <= 4
+          ? `Thema: ${title}\nZitat: ${quote}\nTag: ${row.label}\nDatum: ${row.dateText}\nTagesimpuls: ${text}`
+          : `Thema: ${title}\nTag: ${row.label}\nDatum: ${row.dateText}\nEintrag: ${text}`;
 
       lines.push('BEGIN:VEVENT');
       lines.push(`UID:${uidBase}-${eventIndex}@as-courage`);
@@ -204,24 +302,6 @@ function buildIcsFromPlan(setup: SetupState | null, selectedThemes: EditionRow[]
 
       eventIndex++;
     }
-
-    for (let day = 5; day < 7; day++) {
-      const date = addDays(weekMonday, day);
-      const dtStart = yyyymmdd(date);
-      const dtEnd = yyyymmdd(addDays(date, 1));
-
-      lines.push('BEGIN:VEVENT');
-      lines.push(`UID:${uidBase}-${eventIndex}@as-courage`);
-      lines.push(`DTSTAMP:${stamp}`);
-      lines.push(`DTSTART;VALUE=DATE:${dtStart}`);
-      lines.push(`DTEND;VALUE=DATE:${dtEnd}`);
-      lines.push('TRANSP:TRANSPARENT');
-      lines.push(`SUMMARY:${escapeIcsText('Schönes Wochenende')}`);
-      lines.push(`DESCRIPTION:${escapeIcsText('Schönes Wochenende!')}`);
-      lines.push('END:VEVENT');
-
-      eventIndex++;
-    }
   }
 
   lines.push('END:VCALENDAR', '');
@@ -229,11 +309,12 @@ function buildIcsFromPlan(setup: SetupState | null, selectedThemes: EditionRow[]
 }
 
 type IcalMenuProps = {
-  onDownload: () => void;
-  onEdit: () => void;
+  onDirectDownload: () => void;
+  onQuickEdit: () => void;
+  onEditorOpen: () => void;
 };
 
-function IcalMenu({ onDownload, onEdit }: IcalMenuProps) {
+function IcalMenu({ onDirectDownload, onQuickEdit, onEditorOpen }: IcalMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -263,23 +344,27 @@ function IcalMenu({ onDownload, onEdit }: IcalMenuProps) {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg cursor-pointer"
+        className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg"
         title="iCal öffnen"
       >
-        <span aria-hidden="true" className="text-base leading-none">📅</span>
+        <span aria-hidden="true" className="text-base leading-none">
+          📅
+        </span>
         iCal
-        <span aria-hidden="true" className="text-xs leading-none">{open ? '▲' : '▼'}</span>
+        <span aria-hidden="true" className="text-xs leading-none">
+          {open ? '▲' : '▼'}
+        </span>
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-full z-30 mt-2 w-[260px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div className="absolute left-0 top-full z-30 mt-2 w-[320px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
           <button
             type="button"
             onClick={() => {
               setOpen(false);
-              onDownload();
+              onDirectDownload();
             }}
-            className="flex w-full items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm text-slate-900 transition hover:bg-slate-50 cursor-pointer"
+            className="flex w-full cursor-pointer items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm text-slate-900 transition hover:bg-slate-50"
           >
             <span>iCal direkt herunterladen</span>
           </button>
@@ -288,11 +373,22 @@ function IcalMenu({ onDownload, onEdit }: IcalMenuProps) {
             type="button"
             onClick={() => {
               setOpen(false);
-              onEdit();
+              onQuickEdit();
             }}
-            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm text-slate-900 transition hover:bg-slate-50 cursor-pointer"
+            className="flex w-full cursor-pointer items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm text-slate-900 transition hover:bg-slate-50"
           >
-            <span>iCal bearbeiten</span>
+            <span>Aktuelle Woche schnell bearbeiten</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onEditorOpen();
+            }}
+            className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left text-sm text-slate-900 transition hover:bg-slate-50"
+          >
+            <span>Mehrere Wochen im iCal-Editor bearbeiten</span>
           </button>
         </div>
       ) : null}
@@ -306,7 +402,6 @@ export default function QuotesPage() {
   const [activeDay, setActiveDay] = useState<Record<string, number>>({});
   const [pageIndex, setPageIndex] = useState<number>(0);
   const [appMode, setAppMode] = useState<'free' | 'full' | null>(null);
-  const isFree = appMode === 'free';
   const AuthWrapper = appMode === 'full' ? RequireAuth : React.Fragment;
 
   const [imgFallbackToDemo, setImgFallbackToDemo] = useState<boolean>(false);
@@ -315,6 +410,10 @@ export default function QuotesPage() {
   const [showInlineIcal, setShowInlineIcal] = useState(false);
   const [podcastNotice, setPodcastNotice] = useState<string | null>(null);
   const [bottomSectionOrder, setBottomSectionOrder] = useState<BottomSectionKey[]>([]);
+  const [savedInlineIcalDrafts, setSavedInlineIcalDrafts] = useState<InlineIcalDraftMap>({});
+  const [inlineIcalRows, setInlineIcalRows] = useState<InlineIcalDayRow[]>([]);
+  const [inlineIcalSaved, setInlineIcalSaved] = useState(false);
+
   const notesBlockRef = useRef<HTMLDivElement | null>(null);
   const icalBlockRef = useRef<HTMLDivElement | null>(null);
   const pendingNotesScrollRef = useRef(false);
@@ -327,6 +426,7 @@ export default function QuotesPage() {
 
     setSetup(s);
     setAppMode(mode);
+    setSavedInlineIcalDrafts(readInlineIcalDrafts());
 
     const ids = s?.themeIds ?? [];
     const initialDays: Record<string, number> = {};
@@ -419,6 +519,20 @@ export default function QuotesPage() {
     return `${formatDE(monday)} – ${formatDE(friday)}`;
   }, [setup?.startMonday, clampedIndex]);
 
+  useEffect(() => {
+    if (!current || !weekMondayDate || !setup?.startMonday) {
+      setInlineIcalRows([]);
+      setInlineIcalSaved(false);
+      return;
+    }
+
+    const draftKey = buildWeekDraftStorageKey(current.id, clampedIndex, setup.startMonday);
+    const savedDraft = savedInlineIcalDrafts[draftKey];
+
+    setInlineIcalRows(buildInlineIcalRows(current, weekMondayDate, savedDraft));
+    setInlineIcalSaved(!!savedDraft);
+  }, [current, weekMondayDate, clampedIndex, setup?.startMonday, savedInlineIcalDrafts]);
+
   const dayIndex = current ? activeDay[current.id] ?? 0 : 0;
 
   const canPrev = clampedIndex > 0;
@@ -455,12 +569,63 @@ export default function QuotesPage() {
 
   const hasBottomSections = orderedBottomSections.length > 0;
 
+  function handleInlineIcalSave() {
+    if (!current || !setup?.startMonday) return;
+
+    const draftKey = buildWeekDraftStorageKey(current.id, clampedIndex, setup.startMonday);
+
+    const nextDraft: InlineIcalWeekDraft = {
+      themeId: current.id,
+      weekIndex: clampedIndex,
+      startMondayIso: setup.startMonday,
+      savedAt: new Date().toISOString(),
+      days: inlineIcalRows.reduce(
+        (acc, row) => {
+          acc[row.key] = row.text;
+          return acc;
+        },
+        {
+          Mo: '',
+          Di: '',
+          Mi: '',
+          Do: '',
+          Fr: '',
+          Sa: '',
+          So: '',
+        } as Record<EditableDayKey, string>
+      ),
+    };
+
+    setSavedInlineIcalDrafts((prev) => {
+      const next = {
+        ...prev,
+        [draftKey]: nextDraft,
+      };
+      writeInlineIcalDrafts(next);
+      return next;
+    });
+
+    setInlineIcalSaved(true);
+  }
+
+  function handleInlineRowChange(dayKey: EditableDayKey, nextText: string) {
+    setInlineIcalRows((prev) =>
+      prev.map((row) => (row.key === dayKey ? { ...row, text: nextText } : row))
+    );
+    setInlineIcalSaved(false);
+  }
+
+  function handleDirectIcalDownload() {
+    const ics = buildIcsFromPlan(setup, selectedThemes, savedInlineIcalDrafts);
+    downloadTextFile('thema-der-woche.ics', ics, 'text/calendar;charset=utf-8');
+  }
+
   return (
     <AuthWrapper>
       <BackgroundLayout activeThemeId={current?.id}>
-        <div className="mx-auto flex h-full min-h-[100svh] lg:min-h-0 max-w-6xl px-10 py-3">
-          <div className="w-full max-h-none rounded-none border border-[#F29420] sm:rounded-2xl bg-white/98 sm:bg-white/85 shadow-none sm:shadow-xl backdrop-blur-md min-h-[100dvh] sm:min-h-0 overflow-visible flex flex-col">
-            <div className="p-5 sm:p-7 shrink-0">
+        <div className="mx-auto flex h-full min-h-[100svh] max-w-6xl px-10 py-3 lg:min-h-0">
+          <div className="flex min-h-[100dvh] w-full flex-col overflow-visible rounded-none border border-[#F29420] bg-white/98 shadow-none backdrop-blur-md sm:min-h-0 sm:rounded-2xl sm:bg-white/85 sm:shadow-xl">
+            <div className="shrink-0 p-5 sm:p-7">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h1 className="text-2xl font-semibold text-slate-900">
@@ -468,7 +633,9 @@ export default function QuotesPage() {
                   </h1>
 
                   <div className="mt-2 text-sm text-slate-700">
-                    <span className="text-base font-semibold text-[#F29420]">Kostenlose Version</span>
+                    <span className="text-base font-semibold text-[#F29420]">
+                      Kostenlose Version
+                    </span>
                   </div>
                 </div>
 
@@ -476,7 +643,7 @@ export default function QuotesPage() {
                   <div className="flex flex-wrap gap-2">
                     <Link
                       href="https://thema-der-woche.vercel.app/account"
-                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#F29420] px-4 py-2 text-sm text-slate-900 shadow-md transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-xl cursor-pointer"
+                      className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-xl bg-[#F29420] px-4 py-2 text-sm text-slate-900 shadow-md transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-xl"
                       title="Zum Upgrade"
                     >
                       zum upgrade
@@ -485,7 +652,7 @@ export default function QuotesPage() {
                     <button
                       type="button"
                       onClick={() => router.push('/themes')}
-                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[#4EA72E] bg-[#4EA72E] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-lg cursor-pointer"
+                      className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-xl border border-[#4EA72E] bg-[#4EA72E] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-lg"
                     >
                       zurück zur Themenauswahl
                     </button>
@@ -500,7 +667,7 @@ export default function QuotesPage() {
                     <button
                       type="button"
                       onClick={() => setPodcastNotice(null)}
-                      className="rounded-xl border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 cursor-pointer"
+                      className="cursor-pointer rounded-xl border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
                     >
                       OK
                     </button>
@@ -514,10 +681,10 @@ export default function QuotesPage() {
                   onClick={goPrev}
                   disabled={!canPrev}
                   className={[
-                    'min-h-[44px] rounded-xl px-4 py-2 text-sm font-medium border shadow-sm transition duration-200',
+                    'min-h-[44px] rounded-xl border px-4 py-2 text-sm font-medium shadow-sm transition duration-200',
                     canPrev
-                      ? 'border-[#4EA72E] bg-[#4EA72E] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#3f8a25] hover:border-[#3f8a25] hover:shadow-lg cursor-pointer'
-                      : 'border-slate-200 bg-white text-slate-400 cursor-not-allowed',
+                      ? 'cursor-pointer border-[#4EA72E] bg-[#4EA72E] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-lg'
+                      : 'cursor-not-allowed border-slate-200 bg-white text-slate-400',
                   ].join(' ')}
                 >
                   zurück
@@ -528,10 +695,10 @@ export default function QuotesPage() {
                   onClick={goNext}
                   disabled={!canNext}
                   className={[
-                    'min-h-[44px] rounded-xl px-4 py-2 text-sm font-medium border shadow-sm transition duration-200',
+                    'min-h-[44px] rounded-xl border px-4 py-2 text-sm font-medium shadow-sm transition duration-200',
                     canNext
-                      ? 'border-[#4EA72E] bg-[#4EA72E] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#3f8a25] hover:border-[#3f8a25] hover:shadow-lg cursor-pointer'
-                      : 'border-slate-200 bg-white text-slate-400 cursor-not-allowed',
+                      ? 'cursor-pointer border-[#4EA72E] bg-[#4EA72E] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-lg'
+                      : 'cursor-not-allowed border-slate-200 bg-white text-slate-400',
                   ].join(' ')}
                 >
                   weiter
@@ -559,17 +726,15 @@ export default function QuotesPage() {
 
                 {showIcalButton ? (
                   <IcalMenu
-                    onDownload={() => {
-                      const ics = buildIcsFromPlan(setup, selectedThemes);
-                      downloadTextFile('thema-der-woche.ics', ics, 'text/calendar;charset=utf-8');
-                    }}
-                    onEdit={() => {
+                    onDirectDownload={handleDirectIcalDownload}
+                    onQuickEdit={() => {
                       pendingIcalScrollRef.current = true;
                       setBottomSectionOrder((prev) =>
                         prev.includes('ical') ? prev : [...prev, 'ical']
                       );
                       setShowInlineIcal(true);
                     }}
+                    onEditorOpen={() => router.push(ICAL_EDITOR_ROUTE)}
                   />
                 ) : null}
 
@@ -591,10 +756,12 @@ export default function QuotesPage() {
                       prev.filter((entry) => entry !== 'notes')
                     );
                   }}
-                  className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg cursor-pointer"
+                  className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg"
                   title="Notizen einblenden oder ausblenden"
                 >
-                  <span aria-hidden="true" className="text-base leading-none">📝</span>
+                  <span aria-hidden="true" className="text-base leading-none">
+                    📝
+                  </span>
                   {showNotes ? 'Notizen ausblenden' : 'Notizen einblenden'}
                 </button>
 
@@ -634,12 +801,13 @@ export default function QuotesPage() {
               className={
                 hasBottomSections
                   ? 'px-5 pb-5 sm:px-7 sm:pb-7'
-                  : 'flex-1 min-h-0 overflow-auto lg:overflow-hidden px-5 pb-5 sm:px-7 sm:pb-7'
+                  : 'flex-1 min-h-0 overflow-auto px-5 pb-5 sm:px-7 sm:pb-7 lg:overflow-hidden'
               }
             >
               {!current ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                  Ich finde noch keine ausgewählten Themen. Bitte gehe zur Themenauswahl und wähle Themen aus.
+                  Ich finde noch keine ausgewählten Themen. Bitte gehe zur Themenauswahl und wähle
+                  Themen aus.
                 </div>
               ) : (
                 <>
@@ -651,7 +819,7 @@ export default function QuotesPage() {
                     }
                   >
                     <div className="flex flex-col lg:flex-row">
-                      <div className="relative lg:w-1/2 bg-slate-100">
+                      <div className="relative bg-slate-100 lg:w-1/2">
                         <div className="h-64 lg:h-full">
                           <img
                             src={imageSrc}
@@ -662,21 +830,27 @@ export default function QuotesPage() {
                         </div>
                       </div>
 
-                      <div className="lg:w-1/2 lg:h-full lg:overflow-auto">
+                      <div className="lg:h-full lg:w-1/2 lg:overflow-auto">
                         <div className="p-5 lg:p-6">
                           <div className="flex flex-wrap items-baseline justify-between gap-2">
                             <h2 className="text-lg font-semibold text-slate-900">{currentTitle}</h2>
                             <div className="text-sm text-slate-600">
-                              {dateRangeText ? <span className="font-medium">{dateRangeText}</span> : null}
+                              {dateRangeText ? (
+                                <span className="font-medium">{dateRangeText}</span>
+                              ) : null}
                             </div>
                           </div>
 
                           <div
-                            className="mt-3 sticky top-0 z-10 rounded-xl border-2 bg-slate-50 p-4 shadow-sm"
+                            className="sticky top-0 z-10 mt-3 rounded-xl border-2 bg-slate-50 p-4 shadow-sm"
                             style={{ borderColor: BRAND_ORANGE }}
                           >
-                            <div className="text-lg font-semibold tracking-wide text-slate-900">Wochenzitat</div>
-                            <div className="mt-2 text-lg leading-relaxed text-slate-900">„{current.quote}“</div>
+                            <div className="text-lg font-semibold tracking-wide text-slate-900">
+                              Wochenzitat
+                            </div>
+                            <div className="mt-2 text-lg leading-relaxed text-slate-900">
+                              „{current.quote}“
+                            </div>
                           </div>
 
                           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-5">
@@ -691,22 +865,26 @@ export default function QuotesPage() {
                                   }))
                                 }
                                 className={[
-                                  'w-full rounded-2xl px-3 py-2 text-sm border shadow-sm transition duration-200 cursor-pointer',
+                                  'w-full cursor-pointer rounded-2xl border px-3 py-2 text-sm shadow-sm transition duration-200',
                                   dayIndex === d.index
-                                    ? 'bg-[#4EA72E] text-white border-[#4EA72E] hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#3f8a25] hover:border-[#3f8a25] hover:shadow-md'
-                                    : 'bg-white text-slate-700 border-slate-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-slate-50 hover:border-slate-300 hover:shadow-md',
+                                    ? 'border-[#4EA72E] bg-[#4EA72E] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-md'
+                                    : 'border-slate-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-300 hover:bg-slate-50 hover:shadow-md',
                                 ].join(' ')}
                               >
                                 <span className="flex flex-col items-center leading-tight">
                                   <span className="font-medium">{d.key}</span>
-                                  <span className="text-xs opacity-80">{weekdayDateText(d.index)}</span>
+                                  <span className="text-xs opacity-80">
+                                    {weekdayDateText(d.index)}
+                                  </span>
                                 </span>
                               </button>
                             ))}
                           </div>
 
                           <div className="mt-3 rounded-xl border-2 border-[#F29420] bg-slate-50 p-5">
-                            <div className="text-lg font-semibold text-slate-900">{WEEKDAYS[dayIndex].label}</div>
+                            <div className="text-lg font-semibold text-slate-900">
+                              {WEEKDAYS[dayIndex].label}
+                            </div>
                             <div className="mt-2 text-lg leading-relaxed text-slate-900">
                               {current.questions?.[dayIndex] ?? '—'}
                             </div>
@@ -743,38 +921,41 @@ export default function QuotesPage() {
                           ref={icalBlockRef}
                           className="mt-5 rounded-2xl border border-[#F29420] bg-white p-5 shadow-sm"
                         >
-                          <div className="flex flex-col gap-4">
-                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="space-y-5">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
                               <div>
-                                <h3 className="text-lg font-semibold text-slate-900">iCal-Bereich</h3>
+                                <h3 className="text-lg font-semibold text-slate-900">
+                                  iCal-Schnellbearbeitung
+                                </h3>
                                 <p className="mt-2 text-sm leading-relaxed text-slate-700">
-                                  Dieser Bereich ist jetzt direkt unterhalb der Quotes-Seite vorbereitet.
-                                  Der vollständige iCal-Editor bleibt vorerst noch auf seiner eigenen Seite.
+                                  Hier bearbeitest du die aktuell sichtbare Woche direkt unterhalb
+                                  der Quotes-Seite. Erst nach Klick auf „Änderungen lokal speichern“
+                                  bleiben die Anpassungen lokal auf diesem Gerät erhalten.
                                 </p>
                               </div>
 
                               <div className="flex flex-wrap gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    const ics = buildIcsFromPlan(setup, selectedThemes);
-                                    downloadTextFile(
-                                      'thema-der-woche.ics',
-                                      ics,
-                                      'text/calendar;charset=utf-8'
-                                    );
-                                  }}
-                                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg cursor-pointer"
+                                  onClick={handleInlineIcalSave}
+                                  className={[
+                                    'inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold shadow-md transition duration-200',
+                                    inlineIcalSaved
+                                      ? 'cursor-pointer border border-[#4EA72E] bg-[#4EA72E] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-xl'
+                                      : 'cursor-pointer bg-[#F29420] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-xl',
+                                  ].join(' ')}
                                 >
-                                  iCal direkt herunterladen
+                                  {inlineIcalSaved
+                                    ? 'Änderungen lokal gespeichert'
+                                    : 'Änderungen lokal speichern'}
                                 </button>
 
                                 <button
                                   type="button"
-                                  onClick={() => router.push(ICAL_EDITOR_ROUTE)}
-                                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#F29420] px-4 py-2 text-sm font-medium text-slate-900 shadow-md transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-xl cursor-pointer"
+                                  onClick={handleDirectIcalDownload}
+                                  className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-xl border border-[#4EA72E] bg-[#4EA72E] px-4 py-2 text-sm font-semibold text-white shadow-md transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-xl"
                                 >
-                                  iCal-Editor öffnen
+                                  bearbeiteten iCal herunterladen
                                 </button>
 
                                 <button
@@ -786,70 +967,93 @@ export default function QuotesPage() {
                                       prev.filter((entry) => entry !== 'ical')
                                     );
                                   }}
-                                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg cursor-pointer"
+                                  className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-xl bg-[#F29420] px-4 py-2 text-sm font-semibold text-white shadow-md transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-xl"
                                 >
-                                  iCal ausblenden
+                                  schließen
                                 </button>
                               </div>
                             </div>
 
-                            <div className="grid gap-3 sm:grid-cols-2">
-                              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                                <div className="text-sm font-semibold text-slate-900">Aktuelles Thema</div>
-                                <div className="mt-1 text-sm leading-relaxed text-slate-700">
-                                  {currentTitle || '—'}
+                            <div className="rounded-2xl border-2 border-[#F29420] bg-slate-50 p-4">
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                  <div className="text-lg font-semibold text-slate-900">
+                                    {currentTitle || '—'}
+                                  </div>
+                                  <div className="mt-1 text-sm font-medium text-slate-600">
+                                    {dateRangeText || '—'}
+                                  </div>
+                                </div>
+
+                                <div className="rounded-xl border border-[#F29420] bg-white px-3 py-2 text-sm text-slate-700">
+                                  Aktuelle Woche
                                 </div>
                               </div>
 
-                              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                                <div className="text-sm font-semibold text-slate-900">Aktuelle Woche</div>
-                                <div className="mt-1 text-sm leading-relaxed text-slate-700">
-                                  {dateRangeText || '—'}
+                              <div className="mt-3 rounded-xl border border-[#F29420] bg-white p-4">
+                                <div className="text-sm font-semibold text-slate-900">Wochenzitat</div>
+                                <div className="mt-2 text-sm leading-relaxed text-slate-700">
+                                  „{current?.quote ?? '—'}“
                                 </div>
                               </div>
-                            </div>
 
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                              <div className="text-sm font-semibold text-slate-900">
-                                Vorschau der Kalendereinträge
-                              </div>
-
-                              <div className="mt-3 space-y-2">
-                                {WEEKDAYS.map((day) => (
+                              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                {inlineIcalRows.map((row) => (
                                   <div
-                                    key={day.key}
-                                    className="rounded-xl border border-slate-200 bg-white px-3 py-3"
+                                    key={row.key}
+                                    className="rounded-2xl border border-slate-200 bg-white p-4"
                                   >
-                                    <div className="text-sm font-semibold text-slate-900">
-                                      {day.label} <span className="font-normal text-slate-500">({weekdayDateText(day.index)})</span>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="text-sm font-semibold text-slate-900">
+                                        {row.label}
+                                      </div>
+                                      <div className="text-xs text-slate-500">{row.dateText}</div>
                                     </div>
-                                    <div className="mt-1 text-sm leading-relaxed text-slate-700">
-                                      {current?.questions?.[day.index] ?? '—'}
+
+                                    <textarea
+                                      value={row.text}
+                                      onChange={(event) =>
+                                        handleInlineRowChange(row.key, event.target.value)
+                                      }
+                                      rows={4}
+                                      className="mt-3 min-h-[112px] w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm leading-relaxed text-slate-800 shadow-sm outline-none transition focus:border-[#F29420] focus:ring-2 focus:ring-[#F29420]/20"
+                                    />
+
+                                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                                      <div className="text-xs text-slate-500">
+                                        Standard: {row.defaultText}
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleInlineRowChange(row.key, row.defaultText)
+                                        }
+                                        disabled={row.text === row.defaultText}
+                                        className={[
+                                          'inline-flex min-h-[36px] items-center justify-center rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-sm transition duration-200',
+                                          row.text !== row.defaultText
+                                            ? 'cursor-pointer border-slate-300 bg-white text-slate-700 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-50 hover:shadow-md'
+                                            : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400',
+                                        ].join(' ')}
+                                      >
+                                        Standard
+                                      </button>
                                     </div>
                                   </div>
                                 ))}
-
-                                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                                  <div className="text-sm font-semibold text-slate-900">Samstag</div>
-                                  <div className="mt-1 text-sm leading-relaxed text-slate-700">
-                                    Schönes Wochenende
-                                  </div>
-                                </div>
-
-                                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                                  <div className="text-sm font-semibold text-slate-900">Sonntag</div>
-                                  <div className="mt-1 text-sm leading-relaxed text-slate-700">
-                                    Schönes Wochenende
-                                  </div>
-                                </div>
                               </div>
+                            </div>
+
+                            <div className="text-sm text-slate-600">
+                              Die Schnellbearbeitung gilt nur für die aktuell sichtbare Woche.
                             </div>
                           </div>
                         </div>
                       );
                     }
 
-                    return null;
+                    return null
                   })}
                 </>
               )}
