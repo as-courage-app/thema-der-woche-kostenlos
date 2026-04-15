@@ -8,14 +8,16 @@ import edition1 from '../data/edition1.json';
 import Link from 'next/link';
 import PodcastMiniPlayer from '../../components/PodcastMiniPlayer';
 import { podcastEpisodes } from '../../lib/podcastEpisodes';
-import RequireAuth from '@/components/RequireAuth';
-import { getAppMode } from '@/lib/appMode';
 import MediathekMenu from './MediathekMenu';
 import { EmbeddedNotesHistoryCard } from '@/components/notes/NotesHistoryCard';
 
 const LS_SETUP = 'as-courage.themeSetup.v1';
-const LS_INLINE_ICAL_DRAFTS = 'as-courage.inlineIcalDrafts.v1';
-const ICAL_EDITOR_ROUTE = '/ical-editor';
+const LS_EDITOR2_DRAFTS = 'as-courage.icalEditor2Drafts.v1';
+const LS_EDITOR2_VISIBILITY = 'as-courage.icalEditor2Visibility.v1';
+const LS_ADDITIONAL_LOCAL_CALENDARS = 'as-courage.additionalLocalCalendars.v1';
+const LS_ADDITIONAL_LOCAL_CALENDAR_NOTICE = 'as-courage.additionalLocalCalendarNotice.v1';
+const LS_ADDITIONAL_ENTRY_VISIBILITY = 'as-courage.additionalEntryVisibility.v1';
+const LS_LEGACY_SCHOOL_HOLIDAY_CALENDAR = 'as-courage.schoolHolidayCalendar.v1';
 
 type EditionRow = {
   id: string;
@@ -34,43 +36,47 @@ type SetupState = {
   icalEnabled?: boolean;
 };
 
-type BottomSectionKey = 'notes' | 'ical';
+type DayKey = 'Mo' | 'Di' | 'Mi' | 'Do' | 'Fr' | 'Sa' | 'So';
 
-type EditableDayKey = 'Mo' | 'Di' | 'Mi' | 'Do' | 'Fr' | 'Sa' | 'So';
+type InlineIcalDraftState = Record<string, string>;
+type InlineIcalVisibilityState = Record<string, boolean>;
+type AdditionalEntryVisibilityState = Record<string, boolean>;
+type AdditionalCalendarApplyMode = 'none' | 'full' | 'selected-range';
 
-type InlineIcalWeekDraft = {
-  themeId: string;
-  weekIndex: number;
-  startMondayIso: string;
-  savedAt: string;
-  days: Record<EditableDayKey, string>;
+type LocalAdditionalCalendar = {
+  id: string;
+  fileName: string;
+  rawIcs: string;
+  importedAt: string;
+  applyMode: AdditionalCalendarApplyMode;
+  rangeStart: string | null;
+  rangeEnd: string | null;
 };
 
-type InlineIcalDraftMap = Record<string, InlineIcalWeekDraft>;
+type AdditionalCalendarEntry = {
+  entryId: string;
+  calendarId: string;
+  fileName: string;
+  summary: string;
+  startIso: string;
+  endIsoExclusive: string;
+};
 
-type InlineIcalDayRow = {
-  key: EditableDayKey;
-  label: string;
-  index: number;
-  dateIso: string;
-  dateText: string;
-  text: string;
-  defaultText: string;
+type StoredNoticeState = {
+  status?: 'error';
+  message?: string;
+};
+
+type InclusiveIsoRange = {
+  startIso: string;
+  endIso: string;
 };
 
 const THEMES: EditionRow[] = edition1 as unknown as EditionRow[];
 
-const BRAND_ORANGE = '#F3910A';
+const EDITOR_RED = '#8B1E2D';
 
-const WEEKDAYS = [
-  { key: 'Mo', label: 'Montag', index: 0 },
-  { key: 'Di', label: 'Dienstag', index: 1 },
-  { key: 'Mi', label: 'Mittwoch', index: 2 },
-  { key: 'Do', label: 'Donnerstag', index: 3 },
-  { key: 'Fr', label: 'Freitag', index: 4 },
-];
-
-const EDITABLE_DAYS: Array<{ key: EditableDayKey; label: string; index: number }> = [
+const DISPLAY_DAYS: { key: DayKey; label: string; index: number }[] = [
   { key: 'Mo', label: 'Montag', index: 0 },
   { key: 'Di', label: 'Dienstag', index: 1 },
   { key: 'Mi', label: 'Mittwoch', index: 2 },
@@ -104,37 +110,21 @@ function readSetup(): SetupState | null {
   }
 }
 
-function readInlineIcalDrafts(): InlineIcalDraftMap {
+function readLocalJson<T>(key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(LS_INLINE_ICAL_DRAFTS);
-    if (!raw) return {};
-
-    const parsed = JSON.parse(raw) as InlineIcalDraftMap;
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as T;
+    return parsed ?? fallback;
   } catch {
-    return {};
+    return fallback;
   }
 }
 
-function writeInlineIcalDrafts(drafts: InlineIcalDraftMap) {
-  try {
-    localStorage.setItem(LS_INLINE_ICAL_DRAFTS, JSON.stringify(drafts));
-  } catch {
-    // bewusst still
-  }
-}
-
-function parseIsoDate(iso?: string): Date | null {
+function parseIsoDate(iso?: string | null): Date | null {
   if (!iso || iso.length !== 10) return null;
   const d = new Date(iso + 'T00:00:00');
   return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function formatIsoDate(date: Date): string {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
 }
 
 function addDays(date: Date, days: number): Date {
@@ -148,6 +138,13 @@ function formatDE(date: Date): string {
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const yyyy = date.getFullYear();
   return `${dd}.${mm}.${yyyy}`;
+}
+
+function formatIso(date: Date): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function prettifyId(id: string): string {
@@ -205,51 +202,398 @@ function dtstampUtc() {
   return `${y}${m}${d}T${hh}${mm}${ss}Z`;
 }
 
-function buildWeekDraftStorageKey(themeId: string, weekIndex: number, startMondayIso: string) {
-  return `${startMondayIso}__${weekIndex}__${themeId}`;
+function buildInlineIcalDraftKey(themeId: string, weekIndex: number, dayKey: DayKey) {
+  return `${themeId}__${weekIndex}__${dayKey}`;
 }
 
-function buildInlineIcalRows(
-  theme: EditionRow,
-  weekMonday: Date,
-  savedDraft?: InlineIcalWeekDraft
-): InlineIcalDayRow[] {
-  return EDITABLE_DAYS.map((day) => {
-    const currentDate = addDays(weekMonday, day.index);
-    const defaultText =
-      day.index <= 4 ? theme.questions?.[day.index] ?? '' : 'Schönes Wochenende';
+function getDefaultDayText(theme: EditionRow, day: { key: DayKey; index: number }) {
+  if (day.key === 'Sa' || day.key === 'So') return 'Schönes Wochenende';
+  return theme.questions?.[day.index] ?? '—';
+}
 
-    return {
-      key: day.key,
-      label: day.label,
-      index: day.index,
-      dateIso: formatIsoDate(currentDate),
-      dateText: formatDE(currentDate),
-      text: savedDraft?.days?.[day.key] ?? defaultText,
-      defaultText,
-    };
+function sanitizeStorageIdPart(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '')
+    .slice(0, 80);
+}
+
+function createAdditionalCalendarId(fileName: string, importedAt: string, fallbackIndex = 0) {
+  const filePart = sanitizeStorageIdPart(fileName || 'kalender') || 'kalender';
+  const datePart = sanitizeStorageIdPart(importedAt || String(fallbackIndex)) || String(fallbackIndex);
+  return `calendar-${filePart}-${datePart}`;
+}
+
+function buildAdditionalEntryId(
+  calendarId: string,
+  uid: string | null,
+  startDate: Date,
+  endExclusiveDate: Date,
+  summary: string,
+) {
+  const identityPart =
+    sanitizeStorageIdPart(uid || summary || `${formatIso(startDate)}-${formatIso(endExclusiveDate)}`) ||
+    'eintrag';
+
+  return `${calendarId}__${formatIso(startDate)}__${formatIso(endExclusiveDate)}__${identityPart}`;
+}
+
+function normalizeAdditionalCalendar(
+  raw: Partial<LocalAdditionalCalendar> & { isApplied?: boolean },
+  fallbackIndex: number,
+): LocalAdditionalCalendar {
+  const importedAt =
+    typeof raw.importedAt === 'string' && raw.importedAt.trim().length > 0
+      ? raw.importedAt
+      : new Date().toISOString();
+
+  const fileName =
+    typeof raw.fileName === 'string' && raw.fileName.trim().length > 0
+      ? raw.fileName
+      : `Zusatzkalender ${fallbackIndex + 1}.ics`;
+
+  const initialApplyMode =
+    raw.applyMode === 'full' || raw.applyMode === 'selected-range' || raw.applyMode === 'none'
+      ? raw.applyMode
+      : raw.isApplied
+        ? 'full'
+        : 'none';
+
+  const rangeStart =
+    typeof raw.rangeStart === 'string' && raw.rangeStart.length === 10 ? raw.rangeStart : null;
+
+  const rangeEnd =
+    typeof raw.rangeEnd === 'string' && raw.rangeEnd.length === 10 ? raw.rangeEnd : null;
+
+  const applyMode =
+    initialApplyMode === 'selected-range' && (!rangeStart || !rangeEnd) ? 'none' : initialApplyMode;
+
+  return {
+    id:
+      typeof raw.id === 'string' && raw.id.trim().length > 0
+        ? raw.id
+        : createAdditionalCalendarId(fileName, importedAt, fallbackIndex),
+    fileName,
+    rawIcs: typeof raw.rawIcs === 'string' ? raw.rawIcs : '',
+    importedAt,
+    applyMode,
+    rangeStart: applyMode === 'selected-range' ? rangeStart : null,
+    rangeEnd: applyMode === 'selected-range' ? rangeEnd : null,
+  };
+}
+
+function readStoredAdditionalCalendars(): LocalAdditionalCalendar[] {
+  const stored = readLocalJson<Array<Partial<LocalAdditionalCalendar> & { isApplied?: boolean }>>(
+    LS_ADDITIONAL_LOCAL_CALENDARS,
+    [],
+  );
+
+  const normalizedStored = stored
+    .map((calendar, index) => normalizeAdditionalCalendar(calendar, index))
+    .filter((calendar) => calendar.rawIcs.trim().length > 0);
+
+  const legacySchoolHolidayCalendar = readLocalJson<{
+    fileName?: string;
+    rawIcs?: string;
+    importedAt?: string;
+    status?: 'loaded' | 'error';
+  }>(LS_LEGACY_SCHOOL_HOLIDAY_CALENDAR, {});
+
+  const legacyCalendars: LocalAdditionalCalendar[] =
+    legacySchoolHolidayCalendar.status === 'loaded' &&
+      !!legacySchoolHolidayCalendar.fileName &&
+      !!legacySchoolHolidayCalendar.rawIcs
+      ? [
+        normalizeAdditionalCalendar(
+          {
+            id: createAdditionalCalendarId(
+              legacySchoolHolidayCalendar.fileName,
+              legacySchoolHolidayCalendar.importedAt || 'legacy',
+            ),
+            fileName: legacySchoolHolidayCalendar.fileName,
+            rawIcs: legacySchoolHolidayCalendar.rawIcs,
+            importedAt: legacySchoolHolidayCalendar.importedAt || new Date().toISOString(),
+            applyMode: 'none',
+            rangeStart: null,
+            rangeEnd: null,
+          },
+          normalizedStored.length,
+        ),
+      ]
+      : [];
+
+  const merged = [...legacyCalendars, ...normalizedStored];
+  const seen = new Set<string>();
+
+  return merged.filter((calendar) => {
+    if (seen.has(calendar.id)) return false;
+    seen.add(calendar.id);
+    return true;
   });
+}
+
+function persistAdditionalCalendars(calendars: LocalAdditionalCalendar[]) {
+  if (calendars.length > 0) {
+    localStorage.setItem(LS_ADDITIONAL_LOCAL_CALENDARS, JSON.stringify(calendars));
+  } else {
+    localStorage.removeItem(LS_ADDITIONAL_LOCAL_CALENDARS);
+  }
+
+  localStorage.removeItem(LS_LEGACY_SCHOOL_HOLIDAY_CALENDAR);
+}
+
+function readStoredAdditionalCalendarNotice(): string | null {
+  const notice = readLocalJson<StoredNoticeState>(LS_ADDITIONAL_LOCAL_CALENDAR_NOTICE, {});
+  if (notice.status === 'error' && notice.message) return notice.message;
+  return null;
+}
+
+function persistAdditionalCalendarNotice(message: string | null) {
+  if (message) {
+    localStorage.setItem(
+      LS_ADDITIONAL_LOCAL_CALENDAR_NOTICE,
+      JSON.stringify({
+        status: 'error',
+        message,
+      }),
+    );
+    return;
+  }
+
+  localStorage.removeItem(LS_ADDITIONAL_LOCAL_CALENDAR_NOTICE);
+}
+
+function readStoredAdditionalEntryVisibility(): AdditionalEntryVisibilityState {
+  return readLocalJson<AdditionalEntryVisibilityState>(LS_ADDITIONAL_ENTRY_VISIBILITY, {});
+}
+
+function persistAdditionalEntryVisibility(state: AdditionalEntryVisibilityState) {
+  if (Object.keys(state).length > 0) {
+    localStorage.setItem(LS_ADDITIONAL_ENTRY_VISIBILITY, JSON.stringify(state));
+  } else {
+    localStorage.removeItem(LS_ADDITIONAL_ENTRY_VISIBILITY);
+  }
+}
+
+function unfoldIcsLines(rawIcs: string): string[] {
+  return String(rawIcs ?? '')
+    .replace(/\r\n[ \t]/g, '')
+    .replace(/\n[ \t]/g, '')
+    .split(/\r?\n/);
+}
+
+function readIcsDateAsLocalDay(rawValue?: string): Date | null {
+  const match = String(rawValue ?? '')
+    .trim()
+    .match(/^(\d{4})(\d{2})(\d{2})/);
+
+  if (!match) return null;
+
+  const [, year, month, day] = match;
+  const parsed = new Date(`${year}-${month}-${day}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function unescapeIcsValue(rawValue?: string): string {
+  return String(rawValue ?? '')
+    .replace(/\\n/g, ' · ')
+    .replace(/\\,/g, ',')
+    .replace(/\\;/g, ';')
+    .replace(/\\\\/g, '\\')
+    .trim();
+}
+
+function ensureTransparentEvent(eventLines: string[]): string[] {
+  const result: string[] = [];
+  let hasTransp = false;
+
+  for (const line of eventLines) {
+    if (line.startsWith('TRANSP')) {
+      result.push('TRANSP:TRANSPARENT');
+      hasTransp = true;
+      continue;
+    }
+
+    if (line === 'END:VEVENT' && !hasTransp) {
+      result.push('TRANSP:TRANSPARENT');
+      hasTransp = true;
+    }
+
+    result.push(line);
+  }
+
+  return result;
+}
+
+function getSelectedWeeksRange(
+  setup: SetupState | null,
+  selectedThemes: EditionRow[],
+): InclusiveIsoRange | null {
+  const weeksCount = setup?.weeksCount ?? 0;
+  const startDate = parseIsoDate(setup?.startMonday);
+
+  if (!startDate || weeksCount < 1 || selectedThemes.length === 0) return null;
+
+  const countWeeks = Math.min(weeksCount, selectedThemes.length);
+  if (countWeeks < 1) return null;
+
+  const endDate = addDays(startDate, countWeeks * 7 - 1);
+
+  return {
+    startIso: formatIso(startDate),
+    endIso: formatIso(endDate),
+  };
+}
+
+function isDateWithinInclusiveIsoRange(
+  targetDate: Date,
+  rangeStart: string | null,
+  rangeEnd: string | null,
+): boolean {
+  const startDate = parseIsoDate(rangeStart);
+  const endDate = parseIsoDate(rangeEnd);
+
+  if (!startDate || !endDate) return false;
+
+  return targetDate.getTime() >= startDate.getTime() && targetDate.getTime() <= endDate.getTime();
+}
+
+function getAppliedAdditionalCalendars(calendars: LocalAdditionalCalendar[]): LocalAdditionalCalendar[] {
+  return calendars.filter((calendar) => calendar.applyMode !== 'none' && calendar.rawIcs.trim().length > 0);
+}
+
+function formatAdditionalCalendarStatus(calendar: LocalAdditionalCalendar): string {
+  if (calendar.applyMode === 'full') return 'vollständig übernommen';
+
+  if (calendar.applyMode === 'selected-range') {
+    const startDate = parseIsoDate(calendar.rangeStart);
+    const endDate = parseIsoDate(calendar.rangeEnd);
+
+    if (startDate && endDate) {
+      return `übernommen für ausgewählte Wochen: ${formatDE(startDate)} – ${formatDE(endDate)}`;
+    }
+
+    return 'übernommen für ausgewählte Wochen';
+  }
+
+  return 'nicht übernommen';
+}
+
+function getAppliedAdditionalEntriesForDay(
+  targetDate: Date,
+  calendars: LocalAdditionalCalendar[],
+): AdditionalCalendarEntry[] {
+  const matches: AdditionalCalendarEntry[] = [];
+  const appliedCalendars = getAppliedAdditionalCalendars(calendars);
+
+  for (const calendar of appliedCalendars) {
+    if (
+      calendar.applyMode === 'selected-range' &&
+      !isDateWithinInclusiveIsoRange(targetDate, calendar.rangeStart, calendar.rangeEnd)
+    ) {
+      continue;
+    }
+
+    const lines = unfoldIcsLines(calendar.rawIcs);
+
+    let insideEvent = false;
+    let uid: string | null = null;
+    let summary = '';
+    let dtStartDate: Date | null = null;
+    let dtEndDate: Date | null = null;
+
+    for (const line of lines) {
+      if (line === 'BEGIN:VEVENT') {
+        insideEvent = true;
+        uid = null;
+        summary = '';
+        dtStartDate = null;
+        dtEndDate = null;
+        continue;
+      }
+
+      if (!insideEvent) continue;
+
+      if (line.startsWith('UID')) {
+        uid = unescapeIcsValue(line.split(':').slice(1).join(':')) || null;
+        continue;
+      }
+
+      if (line.startsWith('SUMMARY')) {
+        summary = line.split(':').slice(1).join(':');
+        continue;
+      }
+
+      if (line.startsWith('DTSTART')) {
+        dtStartDate = readIcsDateAsLocalDay(line.split(':').slice(1).join(':'));
+        continue;
+      }
+
+      if (line.startsWith('DTEND')) {
+        dtEndDate = readIcsDateAsLocalDay(line.split(':').slice(1).join(':'));
+        continue;
+      }
+
+      if (line === 'END:VEVENT') {
+        if (dtStartDate) {
+          const normalizedEndExclusive =
+            dtEndDate && dtEndDate.getTime() !== dtStartDate.getTime() ? dtEndDate : addDays(dtStartDate, 1);
+
+          const hasMatch =
+            targetDate.getTime() >= dtStartDate.getTime() &&
+            targetDate.getTime() < normalizedEndExclusive.getTime();
+
+          if (hasMatch) {
+            matches.push({
+              entryId: buildAdditionalEntryId(
+                calendar.id,
+                uid,
+                dtStartDate,
+                normalizedEndExclusive,
+                unescapeIcsValue(summary) || calendar.fileName,
+              ),
+              calendarId: calendar.id,
+              fileName: calendar.fileName,
+              summary: unescapeIcsValue(summary) || calendar.fileName,
+              startIso: formatIso(dtStartDate),
+              endIsoExclusive: formatIso(normalizedEndExclusive),
+            });
+          }
+        }
+
+        insideEvent = false;
+      }
+    }
+  }
+
+  return matches;
 }
 
 function buildIcsFromPlan(
   setup: SetupState | null,
   selectedThemes: EditionRow[],
-  inlineDrafts: InlineIcalDraftMap
+  inlineDrafts: InlineIcalDraftState = {},
+  inlineVisibility: InlineIcalVisibilityState = {},
+  additionalCalendars: LocalAdditionalCalendar[] = [],
+  additionalEntryVisibility: AdditionalEntryVisibilityState = {},
 ): string {
   const stamp = dtstampUtc();
   const uidBase = `tdw-${stamp}-${Math.random().toString(16).slice(2)}`;
 
   const weeksCount = setup?.weeksCount ?? 0;
   const startIso = setup?.startMonday;
-
   const baseDate = parseIsoDate(startIso);
-  if (!baseDate || weeksCount < 1 || selectedThemes.length === 0 || !startIso) {
+
+  if (!baseDate || weeksCount < 1 || selectedThemes.length === 0) {
     return [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
       'PRODID:-//as-courage//Thema der Woche//DE',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
+      'X-WR-CALNAME:Teamkalender',
       'END:VCALENDAR',
       '',
     ].join('\r\n');
@@ -263,6 +607,8 @@ function buildIcsFromPlan(
     'PRODID:-//as-courage//Thema der Woche//DE',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
+    'X-WR-CALNAME:Teamkalender',
+    'X-WR-CALDESC:Thema der Woche – Teamkalender',
   ];
 
   let eventIndex = 0;
@@ -272,23 +618,21 @@ function buildIcsFromPlan(
     const weekMonday = addDays(baseDate, w * 7);
     const title = displayTitle(theme);
     const quote = theme.quote ?? '';
-    const draftKey = buildWeekDraftStorageKey(theme.id, w, startIso);
-    const savedDraft = inlineDrafts[draftKey];
-    const weekRows = buildInlineIcalRows(theme, weekMonday, savedDraft);
 
-    for (const row of weekRows) {
-      const currentDate = addDays(weekMonday, row.index);
-      const dtStart = yyyymmdd(currentDate);
-      const dtEnd = yyyymmdd(addDays(currentDate, 1));
-      const text = row.text?.trim() || row.defaultText;
+    for (const day of DISPLAY_DAYS) {
+      const draftKey = buildInlineIcalDraftKey(theme.id, w, day.key);
+      const isVisible = inlineVisibility[draftKey] ?? true;
+      if (!isVisible) continue;
 
-      const summary =
-        row.index <= 4 ? `${title}: ${text || 'Tagesimpuls'}` : text || 'Schönes Wochenende';
-
-      const desc =
-        row.index <= 4
-          ? `Thema: ${title}\nZitat: ${quote}\nTag: ${row.label}\nDatum: ${row.dateText}\nTagesimpuls: ${text}`
-          : `Thema: ${title}\nTag: ${row.label}\nDatum: ${row.dateText}\nEintrag: ${text}`;
+      const date = addDays(weekMonday, day.index);
+      const dtStart = yyyymmdd(date);
+      const dtEnd = yyyymmdd(addDays(date, 1));
+      const text = inlineDrafts[draftKey] ?? getDefaultDayText(theme, day);
+      const summary = `${title}: ${text || day.label}`;
+      const description =
+        day.key === 'Sa' || day.key === 'So'
+          ? `Thema: ${title}\nZitat: ${quote}\nWochenendhinweis: ${text}`
+          : `Thema: ${title}\nZitat: ${quote}\nTagesimpuls: ${text}`;
 
       lines.push('BEGIN:VEVENT');
       lines.push(`UID:${uidBase}-${eventIndex}@as-courage`);
@@ -297,10 +641,104 @@ function buildIcsFromPlan(
       lines.push(`DTEND;VALUE=DATE:${dtEnd}`);
       lines.push('TRANSP:TRANSPARENT');
       lines.push(`SUMMARY:${escapeIcsText(summary)}`);
-      lines.push(`DESCRIPTION:${escapeIcsText(desc)}`);
+      lines.push(`DESCRIPTION:${escapeIcsText(description)}`);
       lines.push('END:VEVENT');
 
       eventIndex++;
+    }
+  }
+
+  const appliedAdditionalCalendars = getAppliedAdditionalCalendars(additionalCalendars);
+
+  for (const calendar of appliedAdditionalCalendars) {
+    const linesFromCalendar = unfoldIcsLines(calendar.rawIcs);
+
+    let insideEvent = false;
+    let eventLines: string[] = [];
+    let uid: string | null = null;
+    let summary = '';
+    let dtStartDate: Date | null = null;
+    let dtEndDate: Date | null = null;
+
+    for (const line of linesFromCalendar) {
+      if (line === 'BEGIN:VEVENT') {
+        insideEvent = true;
+        eventLines = ['BEGIN:VEVENT'];
+        uid = null;
+        summary = '';
+        dtStartDate = null;
+        dtEndDate = null;
+        continue;
+      }
+
+      if (!insideEvent) continue;
+
+      eventLines.push(line);
+
+      if (line.startsWith('UID')) {
+        uid = unescapeIcsValue(line.split(':').slice(1).join(':')) || null;
+        continue;
+      }
+
+      if (line.startsWith('SUMMARY')) {
+        summary = line.split(':').slice(1).join(':');
+        continue;
+      }
+
+      if (line.startsWith('DTSTART')) {
+        dtStartDate = readIcsDateAsLocalDay(line.split(':').slice(1).join(':'));
+        continue;
+      }
+
+      if (line.startsWith('DTEND')) {
+        dtEndDate = readIcsDateAsLocalDay(line.split(':').slice(1).join(':'));
+        continue;
+      }
+
+      if (line === 'END:VEVENT') {
+        if (dtStartDate) {
+          const normalizedEndExclusive =
+            dtEndDate && dtEndDate.getTime() !== dtStartDate.getTime() ? dtEndDate : addDays(dtStartDate, 1);
+
+          let shouldInclude = false;
+
+          if (calendar.applyMode === 'full') {
+            shouldInclude = true;
+          } else if (calendar.applyMode === 'selected-range') {
+            const rangeStartDate = parseIsoDate(calendar.rangeStart);
+            const rangeEndDate = parseIsoDate(calendar.rangeEnd);
+            const rangeEndExclusive = rangeEndDate ? addDays(rangeEndDate, 1) : null;
+
+            shouldInclude =
+              !!rangeStartDate &&
+              !!rangeEndExclusive &&
+              dtStartDate.getTime() < rangeEndExclusive.getTime() &&
+              normalizedEndExclusive.getTime() > rangeStartDate.getTime();
+          }
+
+          const entryId = buildAdditionalEntryId(
+            calendar.id,
+            uid,
+            dtStartDate,
+            normalizedEndExclusive,
+            unescapeIcsValue(summary) || calendar.fileName,
+          );
+
+          const isVisibleInExport = additionalEntryVisibility[entryId] ?? true;
+
+          if (shouldInclude && isVisibleInExport) {
+            const transparentEventLines = ensureTransparentEvent(eventLines);
+            lines.push(...transparentEventLines);
+          }
+        }
+
+        insideEvent = false;
+        eventLines = [];
+        uid = null;
+        summary = '';
+        dtStartDate = null;
+        dtEndDate = null;
+      }
     }
   }
 
@@ -308,125 +746,51 @@ function buildIcsFromPlan(
   return lines.join('\r\n');
 }
 
-type IcalMenuProps = {
-  onDirectDownload: () => void;
-  onQuickEdit: () => void;
-  onEditorOpen: () => void;
-};
-
-function IcalMenu({ onDirectDownload, onQuickEdit, onEditorOpen }: IcalMenuProps) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (!rootRef.current) return;
-      if (!rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    function handleWindowFocus() {
-      setOpen(false);
-    }
-
-    document.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('focus', handleWindowFocus);
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('focus', handleWindowFocus);
-    };
-  }, []);
-
-  return (
-    <div ref={rootRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg"
-        title="iCal öffnen"
-      >
-        <span aria-hidden="true" className="text-base leading-none">
-          📅
-        </span>
-        iCal
-        <span aria-hidden="true" className="text-xs leading-none">
-          {open ? '▲' : '▼'}
-        </span>
-      </button>
-
-      {open ? (
-        <div className="absolute left-0 top-full z-30 mt-2 w-[320px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              onDirectDownload();
-            }}
-            className="flex w-full cursor-pointer items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm text-slate-900 transition hover:bg-slate-50"
-          >
-            <span>iCal direkt herunterladen</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              onQuickEdit();
-            }}
-            className="flex w-full cursor-pointer items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm text-slate-900 transition hover:bg-slate-50"
-          >
-            <span>Aktuelle Woche schnell bearbeiten</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              onEditorOpen();
-            }}
-            className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left text-sm text-slate-900 transition hover:bg-slate-50"
-          >
-            <span>Mehrere Wochen im iCal-Editor bearbeiten</span>
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export default function QuotesPage() {
   const router = useRouter();
+
   const [setup, setSetup] = useState<SetupState | null>(null);
   const [activeDay, setActiveDay] = useState<Record<string, number>>({});
   const [pageIndex, setPageIndex] = useState<number>(0);
-  const [appMode, setAppMode] = useState<'free' | 'full' | null>(null);
-  const AuthWrapper = appMode === 'full' ? RequireAuth : React.Fragment;
-
   const [imgFallbackToDemo, setImgFallbackToDemo] = useState<boolean>(false);
+
   const [showPodcast, setShowPodcast] = useState(false);
-  const [showNotes, setShowNotes] = useState(false);
-  const [showInlineIcal, setShowInlineIcal] = useState(false);
   const [podcastNotice, setPodcastNotice] = useState<string | null>(null);
-  const [bottomSectionOrder, setBottomSectionOrder] = useState<BottomSectionKey[]>([]);
-  const [savedInlineIcalDrafts, setSavedInlineIcalDrafts] = useState<InlineIcalDraftMap>({});
-  const [inlineIcalRows, setInlineIcalRows] = useState<InlineIcalDayRow[]>([]);
-  const [inlineIcalSaved, setInlineIcalSaved] = useState(false);
+  const [icalNotice, setIcalNotice] = useState<string | null>(null);
+
+  const [showEmbeddedNotes, setShowEmbeddedNotes] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+
+  const [inlineIcalDrafts, setInlineIcalDrafts] = useState<InlineIcalDraftState>({});
+  const [inlineIcalVisibility, setInlineIcalVisibility] = useState<InlineIcalVisibilityState>({});
+  const [additionalEntryVisibility, setAdditionalEntryVisibility] = useState<AdditionalEntryVisibilityState>({});
+  const [editorStateLoaded, setEditorStateLoaded] = useState(false);
+
+  const [additionalCalendars, setAdditionalCalendars] = useState<LocalAdditionalCalendar[]>([]);
+  const [additionalCalendarNotice, setAdditionalCalendarNotice] = useState<string | null>(null);
 
   const notesBlockRef = useRef<HTMLDivElement | null>(null);
-  const icalBlockRef = useRef<HTMLDivElement | null>(null);
   const pendingNotesScrollRef = useRef(false);
-  const pendingIcalScrollRef = useRef(false);
+  const editorTopRef = useRef<HTMLDivElement | null>(null);
+  const additionalCalendarRef = useRef<HTMLDivElement | null>(null);
+  const pendingEditorScrollRef = useRef<'open' | 'close' | null>(null);
 
   useEffect(() => {
     const themeIdFromUrl = new URLSearchParams(window.location.search).get('themeId');
     const s = readSetup();
-    const mode = getAppMode();
+    const storedDrafts = readLocalJson<InlineIcalDraftState>(LS_EDITOR2_DRAFTS, {});
+    const storedVisibility = readLocalJson<InlineIcalVisibilityState>(LS_EDITOR2_VISIBILITY, {});
+    const storedAdditionalCalendars = readStoredAdditionalCalendars();
+    const storedAdditionalCalendarNotice = readStoredAdditionalCalendarNotice();
+    const storedAdditionalEntryVisibility = readStoredAdditionalEntryVisibility();
 
     setSetup(s);
-    setAppMode(mode);
-    setSavedInlineIcalDrafts(readInlineIcalDrafts());
+    setInlineIcalDrafts(storedDrafts);
+    setInlineIcalVisibility(storedVisibility);
+    setAdditionalEntryVisibility(storedAdditionalEntryVisibility);
+    setAdditionalCalendars(storedAdditionalCalendars);
+    setAdditionalCalendarNotice(storedAdditionalCalendarNotice);
+    setEditorStateLoaded(true);
 
     const ids = s?.themeIds ?? [];
     const initialDays: Record<string, number> = {};
@@ -436,10 +800,12 @@ export default function QuotesPage() {
     const initialIndex = themeIdFromUrl ? ids.findIndex((id) => id === themeIdFromUrl) : -1;
     setPageIndex(initialIndex >= 0 ? initialIndex : 0);
     setImgFallbackToDemo(false);
+
+    persistAdditionalCalendars(storedAdditionalCalendars);
   }, []);
 
   useEffect(() => {
-    if (!showNotes) return;
+    if (!showEmbeddedNotes) return;
     if (!pendingNotesScrollRef.current) return;
 
     const node = notesBlockRef.current;
@@ -453,24 +819,59 @@ export default function QuotesPage() {
         block: 'start',
       });
     });
-  }, [showNotes]);
+  }, [showEmbeddedNotes]);
 
   useEffect(() => {
-    if (!showInlineIcal) return;
-    if (!pendingIcalScrollRef.current) return;
+    const pendingScroll = pendingEditorScrollRef.current;
+    if (!pendingScroll) return;
 
-    const node = icalBlockRef.current;
+    if (pendingScroll === 'open') {
+      if (!isEditMode) return;
+
+      const node = additionalCalendarRef.current;
+      if (!node) return;
+
+      pendingEditorScrollRef.current = null;
+
+      window.setTimeout(() => {
+        node.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
+      }, 120);
+
+      return;
+    }
+
+    if (isEditMode) return;
+
+    const node = editorTopRef.current;
     if (!node) return;
 
-    pendingIcalScrollRef.current = false;
+    pendingEditorScrollRef.current = null;
 
-    requestAnimationFrame(() => {
+    window.setTimeout(() => {
       node.scrollIntoView({
         behavior: 'smooth',
         block: 'start',
       });
-    });
-  }, [showInlineIcal]);
+    }, 120);
+  }, [isEditMode]);
+
+  useEffect(() => {
+    if (!editorStateLoaded) return;
+    localStorage.setItem(LS_EDITOR2_DRAFTS, JSON.stringify(inlineIcalDrafts));
+  }, [inlineIcalDrafts, editorStateLoaded]);
+
+  useEffect(() => {
+    if (!editorStateLoaded) return;
+    localStorage.setItem(LS_EDITOR2_VISIBILITY, JSON.stringify(inlineIcalVisibility));
+  }, [inlineIcalVisibility, editorStateLoaded]);
+
+  useEffect(() => {
+    if (!editorStateLoaded) return;
+    persistAdditionalEntryVisibility(additionalEntryVisibility);
+  }, [additionalEntryVisibility, editorStateLoaded]);
 
   const selectedThemes = useMemo(() => {
     const ids = setup?.themeIds;
@@ -481,6 +882,37 @@ export default function QuotesPage() {
 
     return ids.map((id) => map.get(id)).filter(Boolean) as EditionRow[];
   }, [setup]);
+
+  const selectedWeeksRange = useMemo(() => getSelectedWeeksRange(setup, selectedThemes), [setup, selectedThemes]);
+
+  useEffect(() => {
+    if (!editorStateLoaded) return;
+    if (!selectedWeeksRange) return;
+
+    let changed = false;
+
+    const nextCalendars = additionalCalendars.map((calendar) => {
+      if (calendar.applyMode !== 'selected-range') return calendar;
+
+      const hasChangedRange =
+        calendar.rangeStart !== selectedWeeksRange.startIso || calendar.rangeEnd !== selectedWeeksRange.endIso;
+
+      if (!hasChangedRange) return calendar;
+
+      changed = true;
+
+      return {
+        ...calendar,
+        rangeStart: selectedWeeksRange.startIso,
+        rangeEnd: selectedWeeksRange.endIso,
+      };
+    });
+
+    if (!changed) return;
+
+    setAdditionalCalendars(nextCalendars);
+    persistAdditionalCalendars(nextCalendars);
+  }, [additionalCalendars, editorStateLoaded, selectedWeeksRange]);
 
   const totalPages = selectedThemes.length;
   const clampedIndex = totalPages > 0 ? Math.min(pageIndex, totalPages - 1) : 0;
@@ -507,7 +939,7 @@ export default function QuotesPage() {
   }, [setup?.startMonday, clampedIndex]);
 
   const weekdayDateText = useMemo(() => {
-    if (!weekMondayDate) return (index: number) => '';
+    if (!weekMondayDate) return (_index: number) => '';
     return (index: number) => formatDE(addDays(weekMondayDate, index));
   }, [weekMondayDate]);
 
@@ -520,23 +952,105 @@ export default function QuotesPage() {
   }, [setup?.startMonday, clampedIndex]);
 
   useEffect(() => {
-    if (!current || !weekMondayDate || !setup?.startMonday) {
-      setInlineIcalRows([]);
-      setInlineIcalSaved(false);
-      return;
-    }
+    if (!current?.id) return;
 
-    const draftKey = buildWeekDraftStorageKey(current.id, clampedIndex, setup.startMonday);
-    const savedDraft = savedInlineIcalDrafts[draftKey];
+    setInlineIcalDrafts((prev) => {
+      let changed = false;
+      const next = { ...prev };
 
-    setInlineIcalRows(buildInlineIcalRows(current, weekMondayDate, savedDraft));
-    setInlineIcalSaved(!!savedDraft);
-  }, [current, weekMondayDate, clampedIndex, setup?.startMonday, savedInlineIcalDrafts]);
+      for (const day of DISPLAY_DAYS) {
+        const draftKey = buildInlineIcalDraftKey(current.id, clampedIndex, day.key);
+        if (!(draftKey in next)) {
+          next[draftKey] = getDefaultDayText(current, day);
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+
+    setInlineIcalVisibility((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      for (const day of DISPLAY_DAYS) {
+        const draftKey = buildInlineIcalDraftKey(current.id, clampedIndex, day.key);
+        if (!(draftKey in next)) {
+          next[draftKey] = true;
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+  }, [current?.id, current?.questions, clampedIndex]);
 
   const dayIndex = current ? activeDay[current.id] ?? 0 : 0;
+  const currentDayConfig = DISPLAY_DAYS[dayIndex] ?? DISPLAY_DAYS[0];
+
+  const currentDraftKey = current
+    ? buildInlineIcalDraftKey(current.id, clampedIndex, currentDayConfig.key)
+    : null;
+
+  const currentDefaultText =
+    current && currentDayConfig ? getDefaultDayText(current, currentDayConfig) : '—';
+
+  const currentDisplayText =
+    currentDraftKey && current ? inlineIcalDrafts[currentDraftKey] ?? currentDefaultText : '—';
+
+  const currentDayEdited = currentDisplayText !== currentDefaultText;
+
+  const currentTitle = current ? displayTitle(current) : '';
+
+  const imageSrc = useMemo(() => {
+    if (!current) return '/images/demo.jpg';
+    if (imgFallbackToDemo) return '/images/demo.jpg';
+    return `/images/themes/${current.id}.jpg`;
+  }, [current, imgFallbackToDemo]);
 
   const canPrev = clampedIndex > 0;
   const canNext = clampedIndex < totalPages - 1;
+
+  const appliedAdditionalCalendars = useMemo(
+    () => getAppliedAdditionalCalendars(additionalCalendars),
+    [additionalCalendars],
+  );
+
+  const currentAdditionalEntries = useMemo(() => {
+    if (!weekMondayDate) return [];
+    const currentDate = addDays(weekMondayDate, currentDayConfig.index);
+    return getAppliedAdditionalEntriesForDay(currentDate, additionalCalendars);
+  }, [weekMondayDate, currentDayConfig.index, additionalCalendars]);
+
+  function updateInlineIcalDraft(themeId: string, weekIndex: number, dayKey: DayKey, value: string) {
+    const draftKey = buildInlineIcalDraftKey(themeId, weekIndex, dayKey);
+
+    setInlineIcalDrafts((prev) => ({
+      ...prev,
+      [draftKey]: value,
+    }));
+  }
+
+  function toggleInlineIcalVisibility(themeId: string, weekIndex: number, dayKey: DayKey) {
+    const draftKey = buildInlineIcalDraftKey(themeId, weekIndex, dayKey);
+
+    setInlineIcalVisibility((prev) => ({
+      ...prev,
+      [draftKey]: !(prev[draftKey] ?? true),
+    }));
+  }
+
+  function toggleAdditionalEntryVisibility(entryId: string) {
+    setAdditionalEntryVisibility((prev) => ({
+      ...prev,
+      [entryId]: !(prev[entryId] ?? true),
+    }));
+  }
+
+  function resetCurrentDay() {
+    if (!current) return;
+    updateInlineIcalDraft(current.id, clampedIndex, currentDayConfig.key, currentDefaultText);
+  }
 
   function goPrev() {
     setShowPodcast(false);
@@ -550,517 +1064,1181 @@ export default function QuotesPage() {
     setImgFallbackToDemo(false);
   }
 
-  const imageSrc = useMemo(() => {
-    if (!current) return '/images/demo.jpg';
-    if (imgFallbackToDemo) return '/images/demo.jpg';
-    return `/images/themes/${current.id}.jpg`;
-  }, [current, imgFallbackToDemo]);
+  function openEditMode() {
+    setIcalNotice(null);
+    pendingEditorScrollRef.current = 'open';
+    setIsEditMode(true);
+  }
 
-  const currentTitle = current ? displayTitle(current) : '';
-  const showIcalButton = totalPages > 0;
+  function closeEditMode() {
+    setIcalNotice(null);
+    pendingEditorScrollRef.current = 'close';
+    setIsEditMode(false);
+  }
 
-  const orderedBottomSections = useMemo(() => {
-    return bottomSectionOrder.filter((section) => {
-      if (section === 'notes') return showNotes && !!current?.id;
-      if (section === 'ical') return showInlineIcal;
-      return false;
-    });
-  }, [bottomSectionOrder, showNotes, showInlineIcal, current?.id]);
+  function updateAndPersistAdditionalCalendars(nextCalendars: LocalAdditionalCalendar[]) {
+    setAdditionalCalendars(nextCalendars);
+    persistAdditionalCalendars(nextCalendars);
+  }
 
-  const hasBottomSections = orderedBottomSections.length > 0;
+  function clearAdditionalCalendarNotice() {
+    setAdditionalCalendarNotice(null);
+    persistAdditionalCalendarNotice(null);
+  }
 
-  function handleInlineIcalSave() {
-    if (!current || !setup?.startMonday) return;
+  function setAdditionalCalendarError(message: string) {
+    setAdditionalCalendarNotice(message);
+    persistAdditionalCalendarNotice(message);
+  }
 
-    const draftKey = buildWeekDraftStorageKey(current.id, clampedIndex, setup.startMonday);
+  function handleAdditionalCalendarImport(file: File, rawIcs: string) {
+    const importedAt = new Date().toISOString();
 
-    const nextDraft: InlineIcalWeekDraft = {
-      themeId: current.id,
-      weekIndex: clampedIndex,
-      startMondayIso: setup.startMonday,
-      savedAt: new Date().toISOString(),
-      days: inlineIcalRows.reduce(
-        (acc, row) => {
-          acc[row.key] = row.text;
-          return acc;
-        },
+    const nextCalendars = [
+      ...additionalCalendars,
+      normalizeAdditionalCalendar(
         {
-          Mo: '',
-          Di: '',
-          Mi: '',
-          Do: '',
-          Fr: '',
-          Sa: '',
-          So: '',
-        } as Record<EditableDayKey, string>
+          id: createAdditionalCalendarId(file.name, importedAt, additionalCalendars.length),
+          fileName: file.name,
+          rawIcs,
+          importedAt,
+          applyMode: 'none',
+          rangeStart: null,
+          rangeEnd: null,
+        },
+        additionalCalendars.length,
       ),
-    };
+    ];
 
-    setSavedInlineIcalDrafts((prev) => {
-      const next = {
-        ...prev,
-        [draftKey]: nextDraft,
+    updateAndPersistAdditionalCalendars(nextCalendars);
+    clearAdditionalCalendarNotice();
+  }
+
+  function applyAdditionalCalendarMode(calendarId: string, nextMode: AdditionalCalendarApplyMode) {
+    if (nextMode === 'selected-range' && !selectedWeeksRange) {
+      setAdditionalCalendarError(
+        'Für die Übernahme auf ausgewählte Wochen fehlt aktuell ein gültiger Zeitraum.',
+      );
+      return;
+    }
+
+    const nextCalendars = additionalCalendars.map((calendar) => {
+      if (calendar.id !== calendarId) return calendar;
+
+      if (nextMode === 'full') {
+        return {
+          ...calendar,
+          applyMode: 'full' as const,
+          rangeStart: null,
+          rangeEnd: null,
+        };
+      }
+
+      if (nextMode === 'selected-range') {
+        return {
+          ...calendar,
+          applyMode: 'selected-range' as const,
+          rangeStart: selectedWeeksRange?.startIso ?? null,
+          rangeEnd: selectedWeeksRange?.endIso ?? null,
+        };
+      }
+
+      return {
+        ...calendar,
+        applyMode: 'none' as const,
+        rangeStart: null,
+        rangeEnd: null,
       };
-      writeInlineIcalDrafts(next);
-      return next;
     });
 
-    setInlineIcalSaved(true);
+    updateAndPersistAdditionalCalendars(nextCalendars);
+    clearAdditionalCalendarNotice();
   }
 
-  function handleInlineRowChange(dayKey: EditableDayKey, nextText: string) {
-    setInlineIcalRows((prev) =>
-      prev.map((row) => (row.key === dayKey ? { ...row, text: nextText } : row))
+  function removeAdditionalCalendar(calendarId: string) {
+    const nextCalendars = additionalCalendars.filter((calendar) => calendar.id !== calendarId);
+    updateAndPersistAdditionalCalendars(nextCalendars);
+    clearAdditionalCalendarNotice();
+  }
+
+  function showBlockedDownloadNotice() {
+    setIcalNotice((prev) =>
+      prev === 'Der Download des Teamkalenders ist in der Vollversion B oder C verfügbar.'
+        ? null
+        : 'Der Download des Teamkalenders ist in der Vollversion B oder C verfügbar.',
     );
-    setInlineIcalSaved(false);
-  }
-
-  function handleDirectIcalDownload() {
-    const ics = buildIcsFromPlan(setup, selectedThemes, savedInlineIcalDrafts);
-    downloadTextFile('thema-der-woche.ics', ics, 'text/calendar;charset=utf-8');
   }
 
   return (
-    <AuthWrapper>
-      <BackgroundLayout activeThemeId={current?.id}>
-        <div className="mx-auto flex h-full min-h-[100svh] max-w-6xl px-10 py-3 lg:min-h-0">
-          <div className="flex min-h-[100dvh] w-full flex-col overflow-visible rounded-none border border-[#F29420] bg-white/98 shadow-none backdrop-blur-md sm:min-h-0 sm:rounded-2xl sm:bg-white/85 sm:shadow-xl">
-            <div className="shrink-0 p-5 sm:p-7">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h1 className="text-2xl font-semibold text-slate-900">
-                    Thema der Woche <span className="text-slate-600">(Edition 1)</span>
-                  </h1>
+    <BackgroundLayout activeThemeId={current?.id}>
+      <div className="mx-auto flex h-full min-h-[100svh] max-w-6xl px-10 py-3 lg:min-h-0">
+        <div
+          className={[
+            'flex min-h-[100dvh] w-full max-h-none flex-col overflow-visible rounded-none border-[4px] bg-white shadow-none sm:min-h-0 sm:rounded-2xl sm:shadow-xl',
+            isEditMode ? 'border-[#8B1E2D]' : 'border-[#4EA72E]',
+          ].join(' ')}
+        >
+          <div className="shrink-0 p-5 sm:p-7">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-wide text-slate-900">
+                  Thema der Woche <span className="text-slate-600">(Edition 1)</span>{' '}
+                  <span className={isEditMode ? 'font-semibold text-[#8B1E2D]' : 'font-semibold text-[#4EA72E]'}>
+                    {isEditMode ? 'Editor' : 'Zitate & Tagesimpulse'}
+                  </span>
+                </h1>
 
-                  <div className="mt-2 text-sm text-slate-700">
-                    <span className="text-base font-semibold text-[#F29420]">
-                      Kostenlose Version
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex w-full items-center justify-between gap-2 sm:w-auto">
-                  <div className="flex flex-wrap gap-2">
-                    <Link
-                      href="https://thema-der-woche.vercel.app/account"
-                      className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-xl bg-[#F29420] px-4 py-2 text-sm text-slate-900 shadow-md transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-xl"
-                      title="Zum Upgrade"
-                    >
-                      zum upgrade
-                    </Link>
-
-                    <button
-                      type="button"
-                      onClick={() => router.push('/themes')}
-                      className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-xl border border-[#4EA72E] bg-[#4EA72E] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-lg"
-                    >
-                      zurück zur Themenauswahl
-                    </button>
-                  </div>
+                <div className="mt-2 text-sm text-slate-700">
+                  <span className="text-base font-semibold text-slate-900">
+                    Kostenlose Version
+                  </span>
                 </div>
               </div>
 
-              {podcastNotice ? (
-                <div className="mt-3 inline-block max-w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                  <div className="flex items-start justify-between gap-3">
-                    <span>{podcastNotice}</span>
-                    <button
-                      type="button"
-                      onClick={() => setPodcastNotice(null)}
-                      className="cursor-pointer rounded-xl border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
-                    >
-                      OK
-                    </button>
-                  </div>
-                </div>
-              ) : null}
+              <div className="flex w-full items-center justify-between gap-2 sm:w-auto">
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href="https://thema-der-woche.vercel.app/account"
+                    className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-xl border-2 border-[#F29420] bg-[#FFF3E8] px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#FDE6CF] hover:shadow-xl"
+                    title="Zum Upgrade"
+                  >
+                    zum upgrade
+                  </Link>
 
-              <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3">
-                <button
-                  type="button"
-                  onClick={goPrev}
-                  disabled={!canPrev}
-                  className={[
-                    'min-h-[44px] rounded-xl border px-4 py-2 text-sm font-medium shadow-sm transition duration-200',
-                    canPrev
-                      ? 'cursor-pointer border-[#4EA72E] bg-[#4EA72E] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-lg'
-                      : 'cursor-not-allowed border-slate-200 bg-white text-slate-400',
-                  ].join(' ')}
-                >
-                  zurück
-                </button>
-
-                <button
-                  type="button"
-                  onClick={goNext}
-                  disabled={!canNext}
-                  className={[
-                    'min-h-[44px] rounded-xl border px-4 py-2 text-sm font-medium shadow-sm transition duration-200',
-                    canNext
-                      ? 'cursor-pointer border-[#4EA72E] bg-[#4EA72E] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-lg'
-                      : 'cursor-not-allowed border-slate-200 bg-white text-slate-400',
-                  ].join(' ')}
-                >
-                  weiter
-                </button>
-
-                <MediathekMenu
-                  themeId={current?.id}
-                  podcastAllowed={podcastAllowed}
-                  podcastReady={podcastReady}
-                  onPodcastClick={() => {
-                    setPodcastNotice(null);
-                    if (!podcastAllowed) {
-                      setPodcastNotice('Podcast nur für die ersten 4 Themen verfügbar.');
-                      return;
-                    }
-                    if (!podcastReady) {
-                      setPodcastNotice('Podcastfolge in Bearbeitung und aktuell nicht verfügbar.');
-                      return;
-                    }
-                    setShowPodcast((s) => !s);
-                  }}
-                />
-
-                <DetailsMenu themeId={current?.id} />
-
-                {showIcalButton ? (
-                  <IcalMenu
-                    onDirectDownload={handleDirectIcalDownload}
-                    onQuickEdit={() => {
-                      pendingIcalScrollRef.current = true;
-                      setBottomSectionOrder((prev) =>
-                        prev.includes('ical') ? prev : [...prev, 'ical']
-                      );
-                      setShowInlineIcal(true);
-                    }}
-                    onEditorOpen={() => router.push(ICAL_EDITOR_ROUTE)}
-                  />
-                ) : null}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!showNotes) {
-                      pendingNotesScrollRef.current = true;
-                      setBottomSectionOrder((prev) =>
-                        prev.includes('notes') ? prev : [...prev, 'notes']
-                      );
-                      setShowNotes(true);
-                      return;
-                    }
-
-                    pendingNotesScrollRef.current = false;
-                    setShowNotes(false);
-                    setBottomSectionOrder((prev) =>
-                      prev.filter((entry) => entry !== 'notes')
-                    );
-                  }}
-                  className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg"
-                  title="Notizen einblenden oder ausblenden"
-                >
-                  <span aria-hidden="true" className="text-base leading-none">
-                    📝
-                  </span>
-                  {showNotes ? 'Notizen ausblenden' : 'Notizen einblenden'}
-                </button>
-
-                <div className="ml-auto text-sm text-slate-700">
-                  {totalPages > 0 ? (
-                    <>
-                      Thema <span className="font-semibold">{clampedIndex + 1}</span> / {totalPages}
-                    </>
-                  ) : (
-                    <span className="text-slate-600">Noch keine Themen ausgewählt.</span>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => router.push('/themes')}
+                    className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-xl border border-[#F29420] bg-[#F29420] px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#E4891E] hover:bg-[#E4891E] hover:shadow-lg"
+                  >
+                    zurück zur Themenauswahl
+                  </button>
                 </div>
               </div>
             </div>
 
-            {showPodcast && podcastAllowed && currentEpisode ? (
-              <PodcastMiniPlayer
-                src={currentEpisode.audioSrc}
-                title={(() => {
-                  const src = currentEpisode.audioSrc || '';
-                  const match = src.match(/thema-(\d+)\.mp3$/i);
-                  const nr = match ? Number(match[1]) : NaN;
+            {podcastNotice || icalNotice ? (
+              <div className="mt-3 flex flex-wrap gap-3">
+                {podcastNotice ? (
+                  <div className="inline-block max-w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <div className="flex items-start justify-between gap-3">
+                      <span>{podcastNotice}</span>
+                      <button
+                        type="button"
+                        onClick={() => setPodcastNotice(null)}
+                        className="cursor-pointer rounded-xl border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+                      >
+                        OK
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
-                  if (!Number.isFinite(nr)) return currentEpisode.title;
-
-                  const prefix = `ed1-${String(nr).padStart(2, '0')}-`;
-                  const theme = (edition1 as any[]).find((t) =>
-                    String(t?.id ?? '').startsWith(prefix)
-                  );
-
-                  return theme?.title?.trim() || currentEpisode.title || `Podcast Folge ${nr}`;
-                })()}
-              />
+                {icalNotice ? (
+                  <div className="inline-block max-w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <div className="flex items-start justify-between gap-3">
+                      <span>{icalNotice}</span>
+                      <button
+                        type="button"
+                        onClick={() => setIcalNotice(null)}
+                        className="cursor-pointer rounded-xl border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+                      >
+                        OK
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             ) : null}
 
             <div
-              className={
-                hasBottomSections
-                  ? 'px-5 pb-5 sm:px-7 sm:pb-7'
-                  : 'flex-1 min-h-0 overflow-auto px-5 pb-5 sm:px-7 sm:pb-7 lg:overflow-hidden'
-              }
+              ref={editorTopRef}
+              className={[
+                'mt-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3',
+                isEditMode ? 'border-[#8B1E2D]/30 bg-[#8B1E2D]/5' : 'border-slate-200 bg-white',
+              ].join(' ')}
             >
-              {!current ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                  Ich finde noch keine ausgewählten Themen. Bitte gehe zur Themenauswahl und wähle
-                  Themen aus.
-                </div>
-              ) : (
+              <button
+                type="button"
+                onClick={goPrev}
+                disabled={!canPrev}
+                className={[
+                  'min-h-[44px] rounded-xl border px-4 py-2 text-sm font-semibold shadow-sm transition duration-200',
+                  canPrev
+                    ? isEditMode
+                      ? 'cursor-pointer border-[#8B1E2D] bg-[#8B1E2D] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#741827] hover:bg-[#741827] hover:shadow-lg'
+                      : 'cursor-pointer border-[#4EA72E] bg-[#F6FBF4] text-slate-900 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3F8A25] hover:bg-[#EEF8EA] hover:shadow-lg'
+                    : 'cursor-not-allowed border-slate-300 bg-white text-slate-400 shadow-sm',
+                ].join(' ')}
+              >
+                zurück
+              </button>
+
+              <button
+                type="button"
+                onClick={goNext}
+                disabled={!canNext}
+                className={[
+                  'min-h-[44px] rounded-xl border px-4 py-2 text-sm font-semibold shadow-sm transition duration-200',
+                  canNext
+                    ? isEditMode
+                      ? 'cursor-pointer border-[#8B1E2D] bg-[#8B1E2D] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#741827] hover:bg-[#741827] hover:shadow-lg'
+                      : 'cursor-pointer border-[#4EA72E] bg-[#F6FBF4] text-slate-900 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3F8A25] hover:bg-[#EEF8EA] hover:shadow-lg'
+                    : 'cursor-not-allowed border-slate-300 bg-white text-slate-400 shadow-sm',
+                ].join(' ')}
+              >
+                weiter
+              </button>
+
+              <MediathekMenu
+                themeId={current?.id}
+                podcastAllowed={podcastAllowed}
+                podcastReady={podcastReady}
+                onPodcastClick={() => {
+                  if (!podcastAllowed) {
+                    setPodcastNotice((prev) =>
+                      prev === 'Podcast ist für die ersten 4 Themen verfügbar.'
+                        ? null
+                        : 'Podcast ist für die ersten 4 Themen verfügbar.',
+                    );
+                    return;
+                  }
+                  if (!podcastReady) {
+                    setPodcastNotice((prev) =>
+                      prev === 'Podcastfolge in Bearbeitung und aktuell nicht verfügbar.'
+                        ? null
+                        : 'Podcastfolge in Bearbeitung und aktuell nicht verfügbar.',
+                    );
+                    return;
+                  }
+                  setPodcastNotice(null);
+                  setShowPodcast((s) => !s);
+                }}
+              />
+
+              <DetailsMenu themeId={current?.id} />
+
+              {totalPages > 0 ? (
                 <>
-                  <div
-                    className={
-                      hasBottomSections
-                        ? 'rounded-2xl border border-slate-200 bg-white'
-                        : 'rounded-2xl border border-slate-200 bg-white lg:h-full lg:overflow-hidden'
-                    }
+                  <button
+                    type="button"
+                    onClick={showBlockedDownloadNotice}
+                    className={[
+                      'inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-lg',
+                      isEditMode
+                        ? 'border-[#8B1E2D] bg-[#8B1E2D] text-white hover:border-[#741827] hover:bg-[#741827]'
+                        : 'border-[#4EA72E] bg-[#F6FBF4] text-slate-900 hover:border-[#3F8A25] hover:bg-[#EEF8EA]',
+                    ].join(' ')}
+                    title="Download des Teamkalenders"
                   >
-                    <div className="flex flex-col lg:flex-row">
-                      <div className="relative bg-slate-100 lg:w-1/2">
-                        <div className="h-64 lg:h-full">
+                    <span aria-hidden="true" className="text-base leading-none">
+                      ⬇️
+                    </span>
+                    {isEditMode ? 'Teamkalender + herunterladen' : 'Teamkalender herunterladen (Standard)'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={isEditMode ? closeEditMode : openEditMode}
+                    className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl border border-[#8B1E2D] bg-[#8B1E2D] px-4 py-2 text-sm font-medium text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#741827] hover:bg-[#741827] hover:shadow-lg"
+                    title={isEditMode ? 'Bearbeitungsmodus ausblenden' : 'Bearbeitungsmodus einblenden'}
+                  >
+                    <span aria-hidden="true" className="text-base leading-none">
+                      ✏️
+                    </span>
+                    {isEditMode ? 'Editor ausblenden' : 'Editor einblenden'}
+                  </button>
+                </>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!showEmbeddedNotes) {
+                    pendingNotesScrollRef.current = true;
+                    setShowEmbeddedNotes(true);
+                    return;
+                  }
+
+                  pendingNotesScrollRef.current = false;
+                  setShowEmbeddedNotes(false);
+                }}
+                className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg"
+                title={showEmbeddedNotes ? 'Notizen ausblenden' : 'Notizen einblenden'}
+              >
+                <span aria-hidden="true" className="text-base leading-none">
+                  📝
+                </span>{' '}
+                {showEmbeddedNotes ? 'Notizen ausblenden' : 'Notizen einblenden'}
+              </button>
+
+              <div className="ml-auto text-sm text-slate-700">
+                {totalPages > 0 ? (
+                  <div className="text-right">
+                    <div>
+                      Thema <span className="font-semibold">{clampedIndex + 1}</span> / {totalPages}
+                    </div>
+
+                    {selectedWeeksRange ? (
+                      <div className="mt-1 text-xs text-slate-600">
+                        Zeitraum{' '}
+                        <span className="font-semibold text-slate-700">
+                          {formatDE(parseIsoDate(selectedWeeksRange.startIso) as Date)} –{' '}
+                          {formatDE(parseIsoDate(selectedWeeksRange.endIso) as Date)}
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <span className="text-slate-600">Noch keine Themen ausgewählt.</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {showPodcast && podcastAllowed && currentEpisode ? (
+            <PodcastMiniPlayer
+              src={currentEpisode.audioSrc}
+              title={(() => {
+                const src = currentEpisode.audioSrc || '';
+                const match = src.match(/thema-(\d+)\.mp3$/i);
+                const nr = match ? Number(match[1]) : NaN;
+
+                if (!Number.isFinite(nr)) return currentEpisode.title;
+
+                const prefix = `ed1-${String(nr).padStart(2, '0')}-`;
+                const theme = (edition1 as any[]).find((t) => String(t?.id ?? '').startsWith(prefix));
+
+                return theme?.title?.trim() || currentEpisode.title || `Podcast Folge ${nr}`;
+              })()}
+            />
+          ) : null}
+
+          <div
+            className={
+              showEmbeddedNotes
+                ? 'px-5 pb-5 sm:px-7 sm:pb-7'
+                : 'min-h-0 flex-1 overflow-auto px-5 pb-5 sm:px-7 sm:pb-7 lg:overflow-hidden'
+            }
+          >
+            {!current ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                Ich finde noch keine ausgewählten Themen. Bitte gehe zur Themenauswahl und wähle Themen aus.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-5">
+                <div
+                  className={[
+                    'rounded-2xl bg-white',
+                    showEmbeddedNotes || isEditMode
+                      ? 'overflow-hidden border shadow-sm'
+                      : 'overflow-hidden border lg:h-full lg:overflow-hidden',
+                    isEditMode ? 'border-[#8B1E2D]' : 'border-[#4EA72E]',
+                  ].join(' ')}
+                >
+                  <div className="flex flex-col lg:flex-row lg:items-start">
+                    <div className="contents lg:block lg:w-1/2 lg:self-start">
+                      <div className="order-1 relative bg-slate-100 lg:order-none">
+                        <div className="flex items-center justify-center p-4 lg:p-5">
                           <img
                             src={imageSrc}
                             alt={`Bild zu ${currentTitle}`}
-                            className="h-full w-full object-cover object-center"
+                            className="h-auto w-full object-contain"
                             onError={() => setImgFallbackToDemo(true)}
                           />
                         </div>
                       </div>
 
-                      <div className="lg:h-full lg:w-1/2 lg:overflow-auto">
-                        <div className="p-5 lg:p-6">
-                          <div className="flex flex-wrap items-baseline justify-between gap-2">
-                            <h2 className="text-lg font-semibold text-slate-900">{currentTitle}</h2>
-                            <div className="text-sm text-slate-600">
-                              {dateRangeText ? (
-                                <span className="font-medium">{dateRangeText}</span>
-                              ) : null}
-                            </div>
-                          </div>
-
+                      {isEditMode ? (
+                        <div className="order-3 p-4 lg:order-none lg:p-5">
                           <div
-                            className="sticky top-0 z-10 mt-3 rounded-xl border-2 bg-slate-50 p-4 shadow-sm"
-                            style={{ borderColor: BRAND_ORANGE }}
+                            ref={additionalCalendarRef}
+                            className="rounded-2xl border border-[#8B1E2D] bg-white p-5 shadow-sm"
                           >
-                            <div className="text-lg font-semibold tracking-wide text-slate-900">
-                              Wochenzitat
+                            <div className="text-sm font-semibold uppercase tracking-wide text-[#8B1E2D]">
+                              Zusatzkalender
                             </div>
-                            <div className="mt-2 text-lg leading-relaxed text-slate-900">
-                              „{current.quote}“
-                            </div>
-                          </div>
 
-                          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-5">
-                            {WEEKDAYS.map((d) => (
-                              <button
-                                key={d.key}
-                                type="button"
-                                onClick={() =>
-                                  setActiveDay((prev) => ({
-                                    ...prev,
-                                    [current.id]: d.index,
-                                  }))
-                                }
-                                className={[
-                                  'w-full cursor-pointer rounded-2xl border px-3 py-2 text-sm shadow-sm transition duration-200',
-                                  dayIndex === d.index
-                                    ? 'border-[#4EA72E] bg-[#4EA72E] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-md'
-                                    : 'border-slate-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-300 hover:bg-slate-50 hover:shadow-md',
-                                ].join(' ')}
-                              >
-                                <span className="flex flex-col items-center leading-tight">
-                                  <span className="font-medium">{d.key}</span>
-                                  <span className="text-xs opacity-80">
-                                    {weekdayDateText(d.index)}
-                                  </span>
+                            <div className="mt-3 text-sm leading-relaxed text-slate-700">
+                              Hier kannst du lokal heruntergeladene Zusatzkalender im ICS-Format einlesen und
+                              gezielt steuern, welche Termine und Ereignisse du für den ausgewählten Zeitraum übernehmen möchtest.
+                            </div>
+
+                            {selectedWeeksRange ? (
+                              <div className="mt-3 rounded-xl border border-[#8B1E2D]/15 bg-[#8B1E2D]/5 px-3 py-3 text-xs leading-relaxed text-slate-700">
+                                Aktueller Zeitraum für <span className="font-semibold">ausgewählte Wochen</span>:{' '}
+                                <span className="font-semibold text-slate-900">
+                                  {formatDE(parseIsoDate(selectedWeeksRange.startIso) as Date)} –{' '}
+                                  {formatDE(parseIsoDate(selectedWeeksRange.endIso) as Date)}
                                 </span>
-                              </button>
-                            ))}
-                          </div>
-
-                          <div className="mt-3 rounded-xl border-2 border-[#F29420] bg-slate-50 p-5">
-                            <div className="text-lg font-semibold text-slate-900">
-                              {WEEKDAYS[dayIndex].label}
-                            </div>
-                            <div className="mt-2 text-lg leading-relaxed text-slate-900">
-                              {current.questions?.[dayIndex] ?? '—'}
-                            </div>
-                          </div>
-
-                          <div className="h-6" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {orderedBottomSections.map((section) => {
-                    if (section === 'notes' && current?.id) {
-                      return (
-                        <div key="notes" ref={notesBlockRef} className="mt-5">
-                          <EmbeddedNotesHistoryCard
-                            themeId={current.id}
-                            onClose={() => {
-                              pendingNotesScrollRef.current = false;
-                              setShowNotes(false);
-                              setBottomSectionOrder((prev) =>
-                                prev.filter((entry) => entry !== 'notes')
-                              );
-                            }}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (section === 'ical') {
-                      return (
-                        <div
-                          key="ical"
-                          ref={icalBlockRef}
-                          className="mt-5 rounded-2xl border border-[#F29420] bg-white p-5 shadow-sm"
-                        >
-                          <div className="space-y-5">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div>
-                                <h3 className="text-lg font-semibold text-slate-900">
-                                  iCal-Schnellbearbeitung
-                                </h3>
-                                <p className="mt-2 text-sm leading-relaxed text-slate-700">
-                                  Hier bearbeitest du die aktuell sichtbare Woche direkt unterhalb
-                                  der Quotes-Seite. Erst nach Klick auf „Änderungen lokal speichern“
-                                  bleiben die Anpassungen lokal auf diesem Gerät erhalten.
-                                </p>
                               </div>
+                            ) : null}
 
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  onClick={handleInlineIcalSave}
-                                  className={[
-                                    'inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold shadow-md transition duration-200',
-                                    inlineIcalSaved
-                                      ? 'cursor-pointer border border-[#4EA72E] bg-[#4EA72E] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-xl'
-                                      : 'cursor-pointer bg-[#F29420] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-xl',
-                                  ].join(' ')}
-                                >
-                                  {inlineIcalSaved
-                                    ? 'Änderungen lokal gespeichert'
-                                    : 'Änderungen lokal speichern'}
-                                </button>
+                            <div className="mt-4">
+                              <label className="inline-flex min-h-[44px] w-full cursor-pointer items-center justify-center rounded-xl border border-[#8B1E2D] bg-[#8B1E2D] px-4 py-2 text-sm font-medium text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#741827] hover:bg-[#741827] hover:shadow-lg">
+                                Zusatzkalender auswählen
+                                <input
+                                  type="file"
+                                  accept=".ics,text/calendar"
+                                  className="hidden"
+                                  onChange={async (event) => {
+                                    const input = event.target as HTMLInputElement;
+                                    const file = input.files?.[0];
+                                    if (!file) return;
 
-                                <button
-                                  type="button"
-                                  onClick={handleDirectIcalDownload}
-                                  className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-xl border border-[#4EA72E] bg-[#4EA72E] px-4 py-2 text-sm font-semibold text-white shadow-md transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-xl"
-                                >
-                                  bearbeiteten iCal herunterladen
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    pendingIcalScrollRef.current = false;
-                                    setShowInlineIcal(false);
-                                    setBottomSectionOrder((prev) =>
-                                      prev.filter((entry) => entry !== 'ical')
-                                    );
+                                    try {
+                                      const rawIcs = await file.text();
+                                      handleAdditionalCalendarImport(file, rawIcs);
+                                    } catch {
+                                      setAdditionalCalendarError(
+                                        'Die ausgewählte ICS-Datei konnte nicht gelesen werden.',
+                                      );
+                                    } finally {
+                                      input.value = '';
+                                    }
                                   }}
-                                  className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-xl bg-[#F29420] px-4 py-2 text-sm font-semibold text-white shadow-md transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-xl"
-                                >
-                                  schließen
-                                </button>
-                              </div>
+                                />
+                              </label>
                             </div>
 
-                            <div className="rounded-2xl border-2 border-[#F29420] bg-slate-50 p-4">
-                              <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div>
-                                  <div className="text-lg font-semibold text-slate-900">
-                                    {currentTitle || '—'}
-                                  </div>
-                                  <div className="mt-1 text-sm font-medium text-slate-600">
-                                    {dateRangeText || '—'}
-                                  </div>
-                                </div>
-
-                                <div className="rounded-xl border border-[#F29420] bg-white px-3 py-2 text-sm text-slate-700">
-                                  Aktuelle Woche
-                                </div>
+                            {additionalCalendarNotice ? (
+                              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-xs leading-relaxed text-red-800">
+                                {additionalCalendarNotice}
                               </div>
+                            ) : null}
 
-                              <div className="mt-3 rounded-xl border border-[#F29420] bg-white p-4">
-                                <div className="text-sm font-semibold text-slate-900">Wochenzitat</div>
-                                <div className="mt-2 text-sm leading-relaxed text-slate-700">
-                                  „{current?.quote ?? '—'}“
-                                </div>
-                              </div>
+                            {additionalCalendars.length > 0 ? (
+                              <div className="mt-4 space-y-3">
+                                {additionalCalendars.map((calendar) => {
+                                  const isFull = calendar.applyMode === 'full';
+                                  const isSelectedRange = calendar.applyMode === 'selected-range';
+                                  const isNone = calendar.applyMode === 'none';
 
-                              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                                {inlineIcalRows.map((row) => (
-                                  <div
-                                    key={row.key}
-                                    className="rounded-2xl border border-slate-200 bg-white p-4"
-                                  >
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div className="text-sm font-semibold text-slate-900">
-                                        {row.label}
+                                  return (
+                                    <div
+                                      key={calendar.id}
+                                      className="rounded-2xl border border-[#8B1E2D]/20 bg-white px-4 py-4 shadow-sm"
+                                    >
+                                      <div className="text-base font-semibold text-slate-900">{calendar.fileName}</div>
+
+                                      <div className="mt-2 text-sm leading-relaxed text-slate-600">
+                                        Status:{' '}
+                                        <span className="font-semibold text-slate-900">
+                                          {isNone ? 'nicht übernommen' : formatAdditionalCalendarStatus(calendar)}
+                                        </span>
                                       </div>
-                                      <div className="text-xs text-slate-500">{row.dateText}</div>
+
+                                      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => applyAdditionalCalendarMode(calendar.id, 'full')}
+                                          className={[
+                                            'inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border px-4 py-2 text-sm font-medium shadow-sm transition duration-200',
+                                            isFull
+                                              ? 'cursor-default border-[#8B1E2D] bg-[#8B1E2D] text-white opacity-85'
+                                              : 'cursor-pointer border-[#8B1E2D] bg-[#8B1E2D] text-white hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#741827] hover:bg-[#741827] hover:shadow-lg',
+                                          ].join(' ')}
+                                        >
+                                          vollständig übernehmen
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => applyAdditionalCalendarMode(calendar.id, 'selected-range')}
+                                          className={[
+                                            'inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border px-4 py-2 text-sm font-medium shadow-sm transition duration-200',
+                                            isSelectedRange
+                                              ? 'cursor-default border-[#8B1E2D] bg-[#8B1E2D] text-white opacity-85'
+                                              : 'cursor-pointer border-[#8B1E2D] bg-white text-[#8B1E2D] hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#741827] hover:bg-[#8B1E2D]/5 hover:shadow-lg',
+                                          ].join(' ')}
+                                        >
+                                          ausgewählte Wochen übernehmen
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => applyAdditionalCalendarMode(calendar.id, 'none')}
+                                          className="inline-flex min-h-[44px] w-full cursor-pointer items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg"
+                                        >
+                                          Übernahme aufheben
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => removeAdditionalCalendar(calendar.id)}
+                                          className="inline-flex min-h-[44px] w-full cursor-pointer items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg"
+                                        >
+                                          Kalender entfernen
+                                        </button>
+                                      </div>
                                     </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="mt-4 rounded-xl border border-dashed border-[#8B1E2D]/20 bg-[#8B1E2D]/5 px-3 py-3 text-xs leading-relaxed text-slate-600">
+                                Aktuell ist noch kein lokaler Zusatzkalender geladen.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
 
-                                    <textarea
-                                      value={row.text}
-                                      onChange={(event) =>
-                                        handleInlineRowChange(row.key, event.target.value)
-                                      }
-                                      rows={4}
-                                      className="mt-3 min-h-[112px] w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm leading-relaxed text-slate-800 shadow-sm outline-none transition focus:border-[#F29420] focus:ring-2 focus:ring-[#F29420]/20"
-                                    />
+                    <div
+                      className={['order-2 lg:w-1/2 lg:overflow-auto', isEditMode ? 'bg-[#8B1E2D]/5' : ''].join(
+                        ' ',
+                      )}
+                    >
+                      <div className="p-5 lg:p-6">
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <h2 className="text-lg font-semibold text-slate-900">{currentTitle}</h2>
+                          <div className="text-sm text-slate-600">
+                            {dateRangeText ? <span className="font-medium">{dateRangeText}</span> : null}
+                          </div>
+                        </div>
 
-                                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                                      <div className="text-xs text-slate-500">
-                                        Standard: {row.defaultText}
+                        <div
+                          className="sticky top-0 z-10 mt-4 rounded-xl border-2 p-4 shadow-sm"
+                          style={{
+                            borderColor: isEditMode ? EDITOR_RED : '#4EA72E',
+                            backgroundColor: isEditMode ? 'rgba(139, 30, 45, 0.06)' : '#F8FAFC',
+                          }}
+                        >
+                          <div className="text-lg font-semibold tracking-wide text-slate-900">Wochenzitat</div>
+                          <div className="mt-2 text-lg leading-relaxed text-slate-900">„{current.quote}“</div>
+                        </div>
+
+                        <div className="mt-4 space-y-2">
+                          <div className="hidden space-y-2 md:block">
+                            <div className="grid grid-cols-5 gap-2">
+                              {DISPLAY_DAYS.slice(0, 5).map((d) => {
+                                const draftKey = buildInlineIcalDraftKey(current.id, clampedIndex, d.key);
+                                const isVisibleInExport = inlineIcalVisibility[draftKey] ?? true;
+                                const isActiveDay = dayIndex === d.index;
+
+                                return (
+                                  <div
+                                    key={d.key}
+                                    className={[
+                                      'w-full overflow-hidden rounded-2xl border text-sm shadow-sm',
+                                      isEditMode
+                                        ? isActiveDay
+                                          ? 'border-[#8B1E2D]'
+                                          : isVisibleInExport
+                                            ? 'border-[#8B1E2D]/40'
+                                            : 'border-slate-200'
+                                        : isActiveDay
+                                          ? 'border-[#4EA72E]'
+                                          : 'border-slate-200',
+                                    ].join(' ')}
+                                  >
+                                    <div
+                                      className={[
+                                        'flex min-h-[56px] items-stretch',
+                                        isEditMode
+                                          ? isActiveDay
+                                            ? 'bg-[#8B1E2D] text-white'
+                                            : isVisibleInExport
+                                              ? 'bg-[#8B1E2D]/8 text-[#8B1E2D]'
+                                              : 'bg-white text-slate-700'
+                                          : isActiveDay
+                                            ? 'bg-[#4EA72E] text-white'
+                                            : 'bg-white text-slate-700',
+                                      ].join(' ')}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setActiveDay((prev) => ({
+                                            ...prev,
+                                            [current.id]: d.index,
+                                          }))
+                                        }
+                                        className="flex min-h-[56px] flex-1 cursor-pointer items-center px-4 py-2 text-left transition duration-200 hover:-translate-y-0.5 hover:scale-[1.01]"
+                                      >
+                                        <span className="font-medium">{d.key}</span>
+                                      </button>
+
+                                      {isEditMode ? (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            toggleInlineIcalVisibility(current.id, clampedIndex, d.key)
+                                          }
+                                          className={[
+                                            'mr-2 inline-flex h-7 w-7 shrink-0 cursor-pointer self-center items-center justify-center rounded-lg border text-[11px] font-bold shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.04]',
+                                            isVisibleInExport
+                                              ? 'border-[#741827] bg-[#8B1E2D] text-white hover:bg-[#741827]'
+                                              : 'border-slate-300 bg-white text-transparent hover:border-[#8B1E2D]/40 hover:bg-[#8B1E2D]/8',
+                                          ].join(' ')}
+                                          title={
+                                            isVisibleInExport
+                                              ? 'Im Export ausgewählt – zum Ausblenden klicken'
+                                              : 'Nicht im Export ausgewählt – zum Einblenden klicken'
+                                          }
+                                          aria-pressed={isVisibleInExport}
+                                        >
+                                          ✓
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            <div className="grid max-w-[40%] grid-cols-2 gap-2">
+                              {DISPLAY_DAYS.slice(5).map((d) => {
+                                const draftKey = buildInlineIcalDraftKey(current.id, clampedIndex, d.key);
+                                const isVisibleInExport = inlineIcalVisibility[draftKey] ?? true;
+                                const isActiveDay = dayIndex === d.index;
+
+                                return (
+                                  <div
+                                    key={d.key}
+                                    className={[
+                                      'w-full overflow-hidden rounded-2xl border text-sm shadow-sm',
+                                      isEditMode
+                                        ? isActiveDay
+                                          ? 'border-[#8B1E2D]'
+                                          : isVisibleInExport
+                                            ? 'border-[#8B1E2D]/40'
+                                            : 'border-slate-200'
+                                        : isActiveDay
+                                          ? 'border-[#4EA72E]'
+                                          : 'border-slate-200',
+                                    ].join(' ')}
+                                  >
+                                    <div
+                                      className={[
+                                        'flex min-h-[56px] items-stretch',
+                                        isEditMode
+                                          ? isActiveDay
+                                            ? 'bg-[#8B1E2D] text-white'
+                                            : isVisibleInExport
+                                              ? 'bg-[#8B1E2D]/8 text-[#8B1E2D]'
+                                              : 'bg-white text-slate-700'
+                                          : isActiveDay
+                                            ? 'bg-[#4EA72E] text-white'
+                                            : 'bg-white text-slate-700',
+                                      ].join(' ')}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setActiveDay((prev) => ({
+                                            ...prev,
+                                            [current.id]: d.index,
+                                          }))
+                                        }
+                                        className="flex min-h-[56px] flex-1 cursor-pointer items-center px-4 py-2 text-left transition duration-200 hover:-translate-y-0.5 hover:scale-[1.01]"
+                                      >
+                                        <span className="font-medium">{d.key}</span>
+                                      </button>
+
+                                      {isEditMode ? (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            toggleInlineIcalVisibility(current.id, clampedIndex, d.key)
+                                          }
+                                          className={[
+                                            'mr-2 inline-flex h-7 w-7 shrink-0 cursor-pointer self-center items-center justify-center rounded-lg border text-[11px] font-bold shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.04]',
+                                            isVisibleInExport
+                                              ? 'border-[#741827] bg-[#8B1E2D] text-white hover:bg-[#741827]'
+                                              : 'border-slate-300 bg-white text-transparent hover:border-[#8B1E2D]/40 hover:bg-[#8B1E2D]/8',
+                                          ].join(' ')}
+                                          title={
+                                            isVisibleInExport
+                                              ? 'Im Export ausgewählt – zum Ausblenden klicken'
+                                              : 'Nicht im Export ausgewählt – zum Einblenden klicken'
+                                          }
+                                          aria-pressed={isVisibleInExport}
+                                        >
+                                          ✓
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <div className="space-y-2 md:hidden">
+                            <div className="grid grid-cols-3 gap-2">
+                              {DISPLAY_DAYS.slice(0, 3).map((d) => {
+                                const draftKey = buildInlineIcalDraftKey(current.id, clampedIndex, d.key);
+                                const isVisibleInExport = inlineIcalVisibility[draftKey] ?? true;
+                                const isActiveDay = dayIndex === d.index;
+
+                                return (
+                                  <div
+                                    key={d.key}
+                                    className={[
+                                      'w-full overflow-hidden rounded-2xl border text-sm shadow-sm',
+                                      isEditMode
+                                        ? isActiveDay
+                                          ? 'border-[#8B1E2D]'
+                                          : isVisibleInExport
+                                            ? 'border-[#8B1E2D]/40'
+                                            : 'border-slate-200'
+                                        : isActiveDay
+                                          ? 'border-[#4EA72E]'
+                                          : 'border-slate-200',
+                                    ].join(' ')}
+                                  >
+                                    <div
+                                      className={[
+                                        'flex min-h-[76px] flex-col',
+                                        isEditMode
+                                          ? isActiveDay
+                                            ? 'bg-[#8B1E2D] text-white'
+                                            : isVisibleInExport
+                                              ? 'bg-[#8B1E2D]/8 text-[#8B1E2D]'
+                                              : 'bg-white text-slate-700'
+                                          : isActiveDay
+                                            ? 'bg-[#4EA72E] text-white'
+                                            : 'bg-white text-slate-700',
+                                      ].join(' ')}
+                                    >
+                                      <div className="flex min-h-[30px] items-center justify-end px-2 pt-2">
+                                        {isEditMode ? (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              toggleInlineIcalVisibility(current.id, clampedIndex, d.key)
+                                            }
+                                            className={[
+                                              'inline-flex h-6 min-w-[24px] cursor-pointer items-center justify-center rounded-md border px-1 text-[10px] font-bold leading-none shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.04]',
+                                              isVisibleInExport
+                                                ? 'border-[#741827] bg-[#8B1E2D] text-white hover:bg-[#741827]'
+                                                : 'border-slate-300 bg-white text-transparent hover:border-[#8B1E2D]/40 hover:bg-[#8B1E2D]/8',
+                                            ].join(' ')}
+                                            title={
+                                              isVisibleInExport
+                                                ? 'Im Export ausgewählt – zum Ausblenden klicken'
+                                                : 'Nicht im Export ausgewählt – zum Einblenden klicken'
+                                            }
+                                            aria-pressed={isVisibleInExport}
+                                          >
+                                            ✓
+                                          </button>
+                                        ) : (
+                                          <div className="h-6 w-6" aria-hidden="true" />
+                                        )}
                                       </div>
 
                                       <button
                                         type="button"
                                         onClick={() =>
-                                          handleInlineRowChange(row.key, row.defaultText)
+                                          setActiveDay((prev) => ({
+                                            ...prev,
+                                            [current.id]: d.index,
+                                          }))
                                         }
-                                        disabled={row.text === row.defaultText}
-                                        className={[
-                                          'inline-flex min-h-[36px] items-center justify-center rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-sm transition duration-200',
-                                          row.text !== row.defaultText
-                                            ? 'cursor-pointer border-slate-300 bg-white text-slate-700 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-50 hover:shadow-md'
-                                            : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400',
-                                        ].join(' ')}
+                                        className="flex flex-1 cursor-pointer items-center justify-center px-2 pb-3 text-center transition duration-200 hover:-translate-y-0.5 hover:scale-[1.01]"
                                       >
-                                        Standard
+                                        <span className="text-base font-semibold leading-none">{d.key}</span>
                                       </button>
                                     </div>
                                   </div>
-                                ))}
-                              </div>
+                                );
+                              })}
                             </div>
 
-                            <div className="text-sm text-slate-600">
-                              Die Schnellbearbeitung gilt nur für die aktuell sichtbare Woche.
+                            <div className="grid grid-cols-2 gap-2">
+                              {DISPLAY_DAYS.slice(3, 5).map((d) => {
+                                const draftKey = buildInlineIcalDraftKey(current.id, clampedIndex, d.key);
+                                const isVisibleInExport = inlineIcalVisibility[draftKey] ?? true;
+                                const isActiveDay = dayIndex === d.index;
+
+                                return (
+                                  <div
+                                    key={d.key}
+                                    className={[
+                                      'w-full overflow-hidden rounded-2xl border text-sm shadow-sm',
+                                      isEditMode
+                                        ? isActiveDay
+                                          ? 'border-[#8B1E2D]'
+                                          : isVisibleInExport
+                                            ? 'border-[#8B1E2D]/40'
+                                            : 'border-slate-200'
+                                        : isActiveDay
+                                          ? 'border-[#4EA72E]'
+                                          : 'border-slate-200',
+                                    ].join(' ')}
+                                  >
+                                    <div
+                                      className={[
+                                        'flex min-h-[76px] flex-col',
+                                        isEditMode
+                                          ? isActiveDay
+                                            ? 'bg-[#8B1E2D] text-white'
+                                            : isVisibleInExport
+                                              ? 'bg-[#8B1E2D]/8 text-[#8B1E2D]'
+                                              : 'bg-white text-slate-700'
+                                          : isActiveDay
+                                            ? 'bg-[#4EA72E] text-white'
+                                            : 'bg-white text-slate-700',
+                                      ].join(' ')}
+                                    >
+                                      <div className="flex min-h-[30px] items-center justify-end px-2 pt-2">
+                                        {isEditMode ? (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              toggleInlineIcalVisibility(current.id, clampedIndex, d.key)
+                                            }
+                                            className={[
+                                              'inline-flex h-6 min-w-[24px] cursor-pointer items-center justify-center rounded-md border px-1 text-[10px] font-bold leading-none shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.04]',
+                                              isVisibleInExport
+                                                ? 'border-[#741827] bg-[#8B1E2D] text-white hover:bg-[#741827]'
+                                                : 'border-slate-300 bg-white text-transparent hover:border-[#8B1E2D]/40 hover:bg-[#8B1E2D]/8',
+                                            ].join(' ')}
+                                            title={
+                                              isVisibleInExport
+                                                ? 'Im Export ausgewählt – zum Ausblenden klicken'
+                                                : 'Nicht im Export ausgewählt – zum Einblenden klicken'
+                                            }
+                                            aria-pressed={isVisibleInExport}
+                                          >
+                                            ✓
+                                          </button>
+                                        ) : (
+                                          <div className="h-6 w-6" aria-hidden="true" />
+                                        )}
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setActiveDay((prev) => ({
+                                            ...prev,
+                                            [current.id]: d.index,
+                                          }))
+                                        }
+                                        className="flex flex-1 cursor-pointer items-center justify-center px-2 pb-3 text-center transition duration-200 hover:-translate-y-0.5 hover:scale-[1.01]"
+                                      >
+                                        <span className="text-base font-semibold leading-none">{d.key}</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              {DISPLAY_DAYS.slice(5, 7).map((d) => {
+                                const draftKey = buildInlineIcalDraftKey(current.id, clampedIndex, d.key);
+                                const isVisibleInExport = inlineIcalVisibility[draftKey] ?? true;
+                                const isActiveDay = dayIndex === d.index;
+
+                                return (
+                                  <div
+                                    key={d.key}
+                                    className={[
+                                      'w-full overflow-hidden rounded-2xl border text-sm shadow-sm',
+                                      isEditMode
+                                        ? isActiveDay
+                                          ? 'border-[#8B1E2D]'
+                                          : isVisibleInExport
+                                            ? 'border-[#8B1E2D]/40'
+                                            : 'border-slate-200'
+                                        : isActiveDay
+                                          ? 'border-[#4EA72E]'
+                                          : 'border-slate-200',
+                                    ].join(' ')}
+                                  >
+                                    <div
+                                      className={[
+                                        'flex min-h-[76px] flex-col',
+                                        isEditMode
+                                          ? isActiveDay
+                                            ? 'bg-[#8B1E2D] text-white'
+                                            : isVisibleInExport
+                                              ? 'bg-[#8B1E2D]/8 text-[#8B1E2D]'
+                                              : 'bg-white text-slate-700'
+                                          : isActiveDay
+                                            ? 'bg-[#4EA72E] text-white'
+                                            : 'bg-white text-slate-700',
+                                      ].join(' ')}
+                                    >
+                                      <div className="flex min-h-[30px] items-center justify-end px-2 pt-2">
+                                        {isEditMode ? (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              toggleInlineIcalVisibility(current.id, clampedIndex, d.key)
+                                            }
+                                            className={[
+                                              'inline-flex h-6 min-w-[24px] cursor-pointer items-center justify-center rounded-md border px-1 text-[10px] font-bold leading-none shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.04]',
+                                              isVisibleInExport
+                                                ? 'border-[#741827] bg-[#8B1E2D] text-white hover:bg-[#741827]'
+                                                : 'border-slate-300 bg-white text-transparent hover:border-[#8B1E2D]/40 hover:bg-[#8B1E2D]/8',
+                                            ].join(' ')}
+                                            title={
+                                              isVisibleInExport
+                                                ? 'Im Export ausgewählt – zum Ausblenden klicken'
+                                                : 'Nicht im Export ausgewählt – zum Einblenden klicken'
+                                            }
+                                            aria-pressed={isVisibleInExport}
+                                          >
+                                            ✓
+                                          </button>
+                                        ) : (
+                                          <div className="h-6 w-6" aria-hidden="true" />
+                                        )}
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setActiveDay((prev) => ({
+                                            ...prev,
+                                            [current.id]: d.index,
+                                          }))
+                                        }
+                                        className="flex flex-1 cursor-pointer items-center justify-center px-2 pb-3 text-center transition duration-200 hover:-translate-y-0.5 hover:scale-[1.01]"
+                                      >
+                                        <span className="text-base font-semibold leading-none">{d.key}</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         </div>
-                      );
-                    }
 
-                    return null
-                  })}
-                </>
-              )}
-            </div>
+                        {isEditMode ? (
+                          <div className="mt-4 rounded-2xl border border-[#8B1E2D] bg-[#8B1E2D]/10 px-4 py-3 text-sm text-slate-900">
+                            <div className="font-semibold text-[#8B1E2D]">Bearbeitungsmodus</div>
+                            <div className="mt-1">
+                              Hier kannst du den Teamkalender anpassen und Termine und Ereignisse
+                              aus anderen Zusatzkalendern hinzufügen.
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <div
+                          className={[
+                            'mt-3 rounded-xl border-2 p-5',
+                            isEditMode ? 'border-[#8B1E2D] bg-white' : 'border-[#4EA72E] bg-slate-50',
+                          ].join(' ')}
+                        >
+                          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                              <div className="text-lg font-semibold text-slate-900">{currentDayConfig.label}</div>
+
+                              <div className="mt-2 text-sm text-slate-600">
+                                {weekdayDateText(currentDayConfig.index)}
+                              </div>
+                            </div>
+
+                            {currentAdditionalEntries.length > 0 ? (
+                              <div className="w-full lg:max-w-[62%]">
+                                <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                  Zusatztermine an diesem Tag
+                                </div>
+
+                                <div className="mt-2 space-y-2">
+                                  {currentAdditionalEntries.map((entry, index) => {
+                                    const isVisibleEntry = additionalEntryVisibility[entry.entryId] ?? true;
+
+                                    return (
+                                      <div
+                                        key={`${entry.entryId}-${index}`}
+                                        className={[
+                                          'rounded-xl border px-3 py-3 shadow-sm transition duration-200',
+                                          isEditMode
+                                            ? isVisibleEntry
+                                              ? 'border-[#8B1E2D]/20 bg-[#8B1E2D]/5'
+                                              : 'border-slate-200 bg-slate-50 opacity-75'
+                                            : 'border-slate-200 bg-white',
+                                        ].join(' ')}
+                                      >
+                                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                          <div className="min-w-0">
+                                            <div className="text-sm font-medium leading-relaxed text-slate-900">
+                                              {entry.summary}
+                                            </div>
+                                            <div className="mt-1 text-xs text-slate-500">
+                                              {entry.fileName}
+                                            </div>
+                                          </div>
+
+                                          {isEditMode ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => toggleAdditionalEntryVisibility(entry.entryId)}
+                                              className={[
+                                                'inline-flex min-h-[40px] shrink-0 cursor-pointer items-center justify-center rounded-xl border px-3 py-2 text-xs font-semibold shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-lg',
+                                                isVisibleEntry
+                                                  ? 'border-[#8B1E2D] bg-[#8B1E2D] text-white hover:border-[#741827] hover:bg-[#741827]'
+                                                  : 'border-[#8B1E2D] bg-white text-[#8B1E2D] hover:border-[#741827] hover:bg-[#8B1E2D]/5',
+                                              ].join(' ')}
+                                              title={
+                                                isVisibleEntry
+                                                  ? 'Zusatztermin wird exportiert – zum Ausblenden klicken'
+                                                  : 'Zusatztermin wird nicht exportiert – zum Einblenden klicken'
+                                              }
+                                            >
+                                              {isVisibleEntry ? 'wird angezeigt' : 'nicht anzeigen'}
+                                            </button>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+
+                          {isEditMode ? (
+                            <div className="mt-4 rounded-xl border border-[#8B1E2D] bg-[#8B1E2D]/5 p-4">
+                              <div className="text-sm font-semibold text-slate-900">
+                                {currentDayConfig.key === 'Sa' || currentDayConfig.key === 'So'
+                                  ? 'Wochenendhinweis'
+                                  : 'Tagesimpuls'}
+                              </div>
+
+                              <textarea
+                                value={currentDisplayText}
+                                onChange={(event) => {
+                                  if (!current) return;
+                                  updateInlineIcalDraft(
+                                    current.id,
+                                    clampedIndex,
+                                    currentDayConfig.key,
+                                    event.target.value,
+                                  );
+                                }}
+                                rows={7}
+                                className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm leading-relaxed text-slate-800 shadow-sm outline-none transition focus:border-[#8B1E2D] focus:ring-2 focus:ring-[#8B1E2D]/20"
+                              />
+
+                              <div className="mt-4 rounded-xl border border-[#8B1E2D]/20 bg-white/90 px-3 py-3">
+                                <div className="text-sm font-semibold text-slate-900">
+                                  Übernommene Zusatzkalender
+                                </div>
+
+                                {appliedAdditionalCalendars.length > 0 ? (
+                                  <div className="mt-2 space-y-2">
+                                    {appliedAdditionalCalendars.map((calendar) => (
+                                      <div
+                                        key={calendar.id}
+                                        className="rounded-xl border border-[#8B1E2D]/10 bg-[#8B1E2D]/5 px-3 py-2 text-sm leading-relaxed text-slate-700"
+                                      >
+                                        <div className="font-medium text-slate-900">{calendar.fileName}</div>
+                                        <div className="mt-1 text-xs text-slate-500">
+                                          {formatAdditionalCalendarStatus(calendar)}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="mt-2 rounded-xl border border-dashed border-[#8B1E2D]/20 bg-white/70 px-3 py-3 text-xs leading-relaxed text-slate-500">
+                                    Aktuell ist kein Zusatzkalender übernommen.
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="mt-3 flex flex-col gap-2 rounded-xl border border-[#8B1E2D]/20 bg-white/80 px-3 py-3 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                  Standard:{' '}
+                                  <span className="font-semibold text-slate-900">
+                                    {currentDefaultText || '—'}
+                                  </span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={resetCurrentDay}
+                                  disabled={!currentDayEdited}
+                                  className={[
+                                    'inline-flex min-h-[40px] cursor-pointer items-center justify-center rounded-xl border border-[#8B1E2D] bg-white px-3 py-2 text-xs font-semibold text-[#8B1E2D] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#741827] hover:bg-slate-50 hover:shadow-lg',
+                                    !currentDayEdited
+                                      ? 'cursor-not-allowed opacity-40 hover:translate-y-0 hover:scale-100 hover:bg-white hover:shadow-sm'
+                                      : '',
+                                  ].join(' ')}
+                                >
+                                  wiederherstellen
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-2 space-y-3">
+                              <div className="text-lg leading-relaxed text-slate-900">{currentDisplayText}</div>
+
+                              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                                <div className="text-sm font-semibold text-slate-900">
+                                  Übernommene Zusatzkalender
+                                </div>
+
+                                {appliedAdditionalCalendars.length > 0 ? (
+                                  <div className="mt-2 space-y-2">
+                                    {appliedAdditionalCalendars.map((calendar) => (
+                                      <div
+                                        key={calendar.id}
+                                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-relaxed text-slate-700"
+                                      >
+                                        <div className="font-medium text-slate-900">{calendar.fileName}</div>
+                                        <div className="mt-1 text-xs text-slate-500">
+                                          {formatAdditionalCalendarStatus(calendar)}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="mt-2 rounded-xl border border-dashed border-slate-200 bg-white px-3 py-3 text-xs leading-relaxed text-slate-500">
+                                    Aktuell ist kein Zusatzkalender übernommen.
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {isEditMode ? (
+                          <div className="mt-4 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={closeEditMode}
+                              className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl border border-[#8B1E2D] bg-[#8B1E2D] px-4 py-2 text-sm font-medium text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#741827] hover:bg-[#741827] hover:shadow-lg"
+                              title="Bearbeitungsmodus ausblenden"
+                            >
+                              <span aria-hidden="true" className="text-base leading-none">
+                                ✏️
+                              </span>
+                              Editor ausblenden
+                            </button>
+                          </div>
+                        ) : null}
+
+                        <div className="h-6" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
+
+          {showEmbeddedNotes && current?.id ? (
+            <div ref={notesBlockRef} className="px-5 pb-5 sm:px-7 sm:pb-7">
+              <EmbeddedNotesHistoryCard
+                themeId={current.id}
+                onClose={() => {
+                  pendingNotesScrollRef.current = false;
+                  setShowEmbeddedNotes(false);
+                }}
+              />
+            </div>
+          ) : null}
         </div>
-      </BackgroundLayout>
-    </AuthWrapper>
+      </div>
+    </BackgroundLayout>
   );
 }

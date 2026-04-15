@@ -138,7 +138,7 @@ export default function VersionPage() {
                   <li>alle 41 Wochenthemen sichtbar</li>
                   <li>4 von 41 Wochenthemen zur Auswahl</li>
                   <li>4 von 41 Zitaten und Bildern sichtbar</li>
-                  <li>max. 2 Themen gleichzeitig auswählbar</li>
+                  <li>alle 4 Themen gleichzeitig auswählbar</li>
                   <li>Reihenfolge der Themen veränderbar</li>
                   <li>Kennzeichnung der genutzten Themen</li>
                   <li>alle 4 Themen wiederverwendbar</li>

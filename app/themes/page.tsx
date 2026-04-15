@@ -4,8 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import BackgroundLayout from '../../components/BackgroundLayout';
-import { getAppMode, FREE_ALLOWED_THEMES, FREE_WEEKS_COUNT } from '@/lib/appMode';
-import RequireAuth from '@/components/RequireAuth';
+import { FREE_ALLOWED_THEMES, FREE_WEEKS_COUNT } from '@/lib/appMode';
 import edition1 from '../data/edition1.json';
 
 function moveItem<T>(arr: T[], from: number, to: number): T[] {
@@ -58,7 +57,7 @@ function writeLS<T>(key: string, value: T) {
     if (value && typeof value === 'object') {
       const prevRaw = localStorage.getItem(key);
       const prev = prevRaw ? JSON.parse(prevRaw) : {};
-      const next = { ...prev, ...(value as any) };
+      const next = { ...prev, ...(value as Record<string, unknown>) };
       localStorage.setItem(key, JSON.stringify(next));
       return;
     }
@@ -70,7 +69,7 @@ function writeLS<T>(key: string, value: T) {
 }
 
 function isMondayISO(iso: string) {
-  const d = new Date(iso + 'T00:00:00');
+  const d = new Date(`${iso}T00:00:00`);
   return d.getDay() === 1;
 }
 
@@ -128,7 +127,6 @@ function normalizeStringArray(input: unknown): string[] {
 export default function ThemesPage() {
   const router = useRouter();
 
-  const [appMode, setAppMode] = useState<'free' | 'full' | null>(null);
   const [mode, setMode] = useState<Mode>('manual');
   const [weeksCount, setWeeksCount] = useState<number>(1);
   const [startMonday, setStartMonday] = useState<string>(nextMondayISO());
@@ -138,15 +136,8 @@ export default function ThemesPage() {
   const [selectionLoaded, setSelectionLoaded] = useState(false);
   const [usedThemes, setUsedThemes] = useState<string[]>([]);
 
-  const SETUP_KEY = 'as-courage.themeSetup.v1';
-
-  useEffect(() => {
-    setAppMode(getAppMode());
-  }, []);
-
-  const isFree = appMode === 'free';
-  const upperWeeks = isFree ? FREE_WEEKS_COUNT : 41;
-  const AuthWrapper = isFree ? React.Fragment : RequireAuth;
+  const upperWeeks = FREE_WEEKS_COUNT;
+  const SETUP_KEY = LS.setup;
 
   const sortedThemes = useMemo(() => {
     return [...THEMES].sort((x, y) => sortDE(displayTitle(x), displayTitle(y)));
@@ -155,14 +146,14 @@ export default function ThemesPage() {
   useEffect(() => {
     const possibleKeys = [LS.setup, 'as-courage.themeSetup', 'themeSetup', 'setup', 'as-courage.setup.v1'];
 
-    let setup: any = null;
+    let setup: Record<string, unknown> | null = null;
     for (const k of possibleKeys) {
       try {
         const raw = localStorage.getItem(k);
         if (!raw) continue;
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
-          setup = parsed;
+          setup = parsed as Record<string, unknown>;
           break;
         }
       } catch {
@@ -177,9 +168,17 @@ export default function ThemesPage() {
         (typeof setup.anzahlWochen === 'number' && setup.anzahlWochen) ||
         null;
 
-      if (wc && wc >= 1) setWeeksCount(Math.min(upperWeeks, Math.max(1, wc)));
-      if (typeof setup.startMonday === 'string' && setup.startMonday.length === 10) setStartMonday(setup.startMonday);
-      if (setup.mode === 'manual' || setup.mode === 'random') setMode(setup.mode);
+      if (wc && wc >= 1) {
+        setWeeksCount(Math.min(upperWeeks, Math.max(1, wc)));
+      }
+
+      if (typeof setup.startMonday === 'string' && setup.startMonday.length === 10) {
+        setStartMonday(setup.startMonday);
+      }
+
+      if (setup.mode === 'manual' || setup.mode === 'random') {
+        setMode(setup.mode);
+      }
     }
 
     const usedRaw = readLS<unknown>(LS.usedThemes, []);
@@ -188,7 +187,7 @@ export default function ThemesPage() {
     setUsedThemes(usedArr);
 
     const selRaw = readLS<unknown>(LS.selection, []);
-    const selArr = normalizeStringArray(selRaw);
+    const selArr = normalizeStringArray(selRaw).filter((id) => FREE_ALLOWED_THEMES.has(id));
     setSelectedThemes(selArr.slice(0, Math.min(selArr.length, upperWeeks)));
 
     setSelectionLoaded(true);
@@ -213,7 +212,7 @@ export default function ThemesPage() {
     } catch {
       // ignorieren
     }
-  }, [setupLoaded, weeksCount, startMonday]);
+  }, [setupLoaded, weeksCount, startMonday, SETUP_KEY]);
 
   useEffect(() => {
     if (!selectionLoaded) return;
@@ -243,6 +242,8 @@ export default function ThemesPage() {
   const showThemesList = !selectionComplete;
 
   function toggleTheme(id: string) {
+    if (!FREE_ALLOWED_THEMES.has(id)) return;
+
     setError(null);
     setSelectedThemes((prev) => {
       const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
@@ -268,7 +269,7 @@ export default function ThemesPage() {
 
     const pool = sortedThemes
       .map((t) => t.id)
-      .filter((id) => !isFree || FREE_ALLOWED_THEMES.has(id));
+      .filter((id) => FREE_ALLOWED_THEMES.has(id));
 
     const n = Math.min(weeksCount, pool.length);
     const copy = [...pool];
@@ -291,7 +292,7 @@ export default function ThemesPage() {
       return false;
     }
     if (!isMondayISO(startMonday)) {
-      setError('Das Startdatum muss ein Montag sein.');
+      setError('Das Startdatum muss ein Montag (Mo) sein.');
       return false;
     }
     if (weeksCount < 1) {
@@ -343,300 +344,417 @@ export default function ThemesPage() {
   }, [selectedThemes, sortedThemes, startMonday]);
 
   return (
-    <AuthWrapper>
-      <BackgroundLayout>
-        <div className="mx-auto flex min-h-[100svh] w-full max-w-6xl px-2 py-2 sm:px-4 sm:py-3 lg:px-6">
-          <div className="flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-[#F29420] bg-white/85 shadow-xl backdrop-blur-md">
-            <div className="shrink-0 p-4 sm:p-6 lg:p-7">
-              <header>
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0">
-                    <h1 className="text-2xl font-semibold text-slate-900">
-                      Thema der Woche <span className="text-slate-600">(Edition 1)</span>
-                    </h1>
+    <BackgroundLayout>
+      <div className="mx-auto flex min-h-[100svh] w-full max-w-6xl px-2 py-2 sm:px-4 sm:py-3 lg:px-6">
+        <div className="flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border-[4px] border-[#F29420] bg-white shadow-xl">
+          <div className="shrink-0 p-4 sm:p-6 lg:p-7">
+            <header>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <h1 className="text-2xl font-semibold tracking-wide text-slate-900">
+                    Thema der Woche <span className="text-slate-600">(Edition 1)</span>{' '}
+                    <span className="font-semibold text-[#F29420]">Themenauswahl</span>
+                  </h1>
 
-                    <div className="mt-2 text-sm text-slate-700">
-                      <span className="text-base font-semibold text-[#F29420]">Kostenlose Version</span>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <div className="text-base text-slate-900">
+                      <span className="font-semibold text-slate-900">Kostenlose Version</span>
                     </div>
-                  </div>
-
-                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-                    <Link
-                      href="/version"
-                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-xl cursor-pointer"
-                      title="Zur Begrüßungsseite"
-                    >
-                      zurück
-                    </Link>
 
                     <Link
                       href="https://thema-der-woche.vercel.app/account"
-                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#F29420] px-4 py-2 text-sm font-medium text-slate-900 shadow-md transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-xl cursor-pointer"
+                      className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-xl border-2 border-[#F29420] bg-[#FFF3E8] px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#FDE6CF] hover:shadow-xl"
                       title="Zum Upgrade"
                     >
                       zum upgrade
                     </Link>
                   </div>
                 </div>
-              </header>
-            </div>
 
-            <div
-              className={[
-                showThemesList
-                  ? 'min-h-0 flex-1 overflow-auto px-4 pb-4 sm:px-6 sm:pb-6 lg:px-7 lg:pb-7'
-                  : 'overflow-visible px-4 sm:px-6 lg:px-7',
-              ].join(' ')}
-            >
-              <div className="grid gap-3 lg:grid-cols-3">
-                <div className="rounded-xl border border-slate-200 bg-white p-3 text-black sm:text-slate-800">
-                  <label className="block text-sm font-medium text-slate-800">Anzahl Wochen (1 oder 2 in kostenlos)</label>
-
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = Math.max(1, weeksCount - 1);
-                        setWeeksCount(next);
-                        setSelectedThemes((prev) => prev.slice(0, next));
-                        setError(null);
-                      }}
-                      disabled={weeksCount <= 1}
-                      className={[
-                        'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-lg font-semibold shadow-sm transition',
-                        weeksCount > 1
-                          ? 'border-slate-300 bg-white text-slate-900 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-xl cursor-pointer'
-                          : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed',
-                      ].join(' ')}
-                      aria-label="Eine Woche weniger"
-                      title="Eine Woche weniger"
-                    >
-                      −
-                    </button>
-
-                    <input
-                      type="number"
-                      min={1}
-                      max={upperWeeks}
-                      value={weeksCount}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-
-                        if (raw === '') {
-                          setWeeksCount(1);
-                          setSelectedThemes((prev) => prev.slice(0, 1));
-                          setError(null);
-                          return;
-                        }
-
-                        const n = Math.floor(Number(raw));
-                        const next = Number.isFinite(n) ? Math.min(upperWeeks, Math.max(1, n)) : 1;
-
-                        setWeeksCount(next);
-                        setSelectedThemes((prev) => prev.slice(0, next));
-                        setError(null);
-                      }}
-                      className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-center text-sm outline-none focus:border-slate-400"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = Math.min(upperWeeks, weeksCount + 1);
-                        setWeeksCount(next);
-                        setSelectedThemes((prev) => prev.slice(0, next));
-                        setError(null);
-                      }}
-                      disabled={weeksCount >= upperWeeks}
-                      className={[
-                        'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-lg font-semibold shadow-sm transition',
-                        weeksCount < upperWeeks
-                          ? 'border-slate-300 bg-white text-slate-900 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-xl cursor-pointer'
-                          : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed',
-                      ].join(' ')}
-                      aria-label="Eine Woche mehr"
-                      title="Eine Woche mehr"
-                    >
-                      +
-                    </button>
-                  </div>
-
-                  <p className="mt-1 text-xs text-slate-600">Pro Woche: Mo–Fr (5 Tagesimpulse).</p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-end">
+                  <Link
+                    href="/version"
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-slate-100 hover:border-slate-400 hover:shadow-xl cursor-pointer"
+                    title="Zur Begrüßungsseite"
+                  >
+                    zurück
+                  </Link>
                 </div>
+              </div>
+            </header>
+          </div>
 
-                <div className="rounded-xl border border-slate-200 bg-white p-3 text-black sm:text-slate-800">
-                  <label className="block text-sm font-medium text-slate-800">Start (bitte montags starten)</label>
-                  <input
-                    type="date"
-                    value={startMonday}
-                    onChange={(e) => {
-                      setStartMonday(e.target.value);
+          <div
+            className={[
+              showThemesList
+                ? 'min-h-0 flex-1 overflow-auto px-4 pb-4 sm:px-6 sm:pb-6 lg:px-7 lg:pb-7'
+                : 'overflow-visible px-4 sm:px-6 lg:px-7',
+            ].join(' ')}
+          >
+            <div className="grid gap-3 lg:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-3 text-black sm:text-slate-800">
+                <label className="block text-sm font-medium text-slate-800">Anzahl Wochen (Empfehlung max. 4)</label>
+
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = Math.max(1, weeksCount - 1);
+                      setWeeksCount(next);
+                      setSelectedThemes((prev) => prev.slice(0, next));
                       setError(null);
                     }}
-                    className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                    disabled={weeksCount <= 1}
+                    className={[
+                      'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-lg font-semibold shadow-sm transition',
+                      weeksCount > 1
+                        ? 'border-slate-300 bg-white text-slate-900 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-slate-100 hover:border-slate-400 hover:shadow-xl cursor-pointer'
+                        : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed',
+                    ].join(' ')}
+                    aria-label="Eine Woche weniger"
+                    title="Eine Woche weniger"
+                  >
+                    −
+                  </button>
+
+                  <input
+                    type="number"
+                    min={1}
+                    max={4}
+                    value={weeksCount}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+
+                      if (raw === '') {
+                        setWeeksCount(1);
+                        setSelectedThemes((prev) => prev.slice(0, 1));
+                        setError(null);
+                        return;
+                      }
+
+                      const n = Math.floor(Number(raw));
+                      const next = Number.isFinite(n) ? Math.min(upperWeeks, Math.max(1, n)) : 1;
+
+                      setWeeksCount(next);
+                      setSelectedThemes((prev) => prev.slice(0, next));
+                      setError(null);
+                    }}
+                    className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-center text-sm outline-none focus:border-slate-400"
                   />
 
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setStartMonday(nextMondayISO())}
-                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs transition hover:bg-slate-50"
-                    >
-                      Nächster Montag
-                    </button>
-
-                    <div className="self-center text-xs text-slate-600">{isMondayISO(startMonday) ? '✓ Montag' : '✕ kein Montag'}</div>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = Math.min(upperWeeks, weeksCount + 1);
+                      setWeeksCount(next);
+                      setSelectedThemes((prev) => prev.slice(0, next));
+                      setError(null);
+                    }}
+                    disabled={weeksCount >= upperWeeks}
+                    className={[
+                      'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-lg font-semibold shadow-sm transition',
+                      weeksCount < upperWeeks
+                        ? 'border-slate-300 bg-white text-slate-900 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-slate-100 hover:border-slate-400 hover:shadow-xl cursor-pointer'
+                        : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed',
+                    ].join(' ')}
+                    aria-label="Eine Woche mehr"
+                    title="Eine Woche mehr"
+                  >
+                    +
+                  </button>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-white p-3 text-black sm:text-slate-800">
-                  <label className="block text-sm font-medium text-slate-800">Modus</label>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMode('manual');
-                        setError(null);
-                      }}
-                      className={[
-                        'rounded-lg border px-3 py-2 text-sm transition',
-                        mode === 'manual'
-                          ? 'border-[#F29420] bg-[#F29420] text-white'
-                          : 'border-slate-200 bg-white text-slate-900 hover:bg-slate-50',
-                      ].join(' ')}
-                    >
-                      Manuell
-                    </button>
+                <p className="mt-1 text-xs text-slate-600">Pro Woche: Mo–Fr (5 Tagesimpulse).</p>
+              </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMode('random');
-                        setError(null);
-                      }}
-                      className={[
-                        'rounded-lg border px-3 py-2 text-sm transition',
-                        mode === 'random'
-                          ? 'border-[#F29420] bg-[#F29420] text-white'
-                          : 'border-slate-200 bg-white text-slate-900 hover:bg-slate-50',
-                      ].join(' ')}
-                    >
-                      Zufall
-                    </button>
-                  </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-3 text-black sm:text-slate-800">
+                <label className="block text-sm font-medium text-slate-800">Start (bitte montags starten)</label>
+                <input
+                  type="date"
+                  value={startMonday}
+                  onChange={(e) => {
+                    setStartMonday(e.target.value);
+                    setError(null);
+                  }}
+                  className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                />
+
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStartMonday(nextMondayISO())}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs transition hover:bg-slate-50"
+                  >
+                    Nächster Montag
+                  </button>
+
+                  <div className="self-center text-xs text-slate-600">{isMondayISO(startMonday) ? '✓ Montag' : '✕ kein Montag'}</div>
                 </div>
               </div>
 
-              <div className="mt-4 mb-4 flex flex-wrap items-center gap-2">
-                {mode === 'random' && (
+              <div className="rounded-xl border border-slate-200 bg-white p-3 text-black sm:text-slate-800">
+                <label className="block text-sm font-medium text-slate-800">Modus</label>
+                <div className="mt-2 grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={pickRandomThemes}
-                    className="inline-flex h-[48px] cursor-pointer items-center rounded-xl border border-[#F29420] bg-[#F29420] px-4 py-0 text-sm text-white shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#E4891E] hover:bg-[#E4891E] hover:shadow-xl"
+                    onClick={() => {
+                      setMode('manual');
+                      setError(null);
+                    }}
+                    className={[
+                      'rounded-lg px-3 py-2 text-sm transition shadow-sm',
+                      mode === 'manual'
+                        ? 'border-2 border-[#F29420] bg-[#FFF3E8] font-semibold text-slate-900'
+                        : 'border border-slate-300 bg-white text-slate-900 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#F29420] hover:bg-[#FFF3E8] hover:shadow-xl cursor-pointer',
+                    ].join(' ')}
                   >
-                    Zufallsauswahl erzeugen
+                    Manuell
                   </button>
-                )}
 
-                <button
-                  type="button"
-                  onClick={clearSelection}
-                  className="inline-flex h-[48px] cursor-pointer items-center rounded-xl border border-slate-300 bg-white px-4 py-0 text-sm text-black shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-xl"
-                >
-                  Auswahl aufheben
-                </button>
-
-                <button
-                  type="button"
-                  onClick={clearUsedThemes}
-                  className="inline-flex h-[48px] cursor-pointer items-center rounded-xl border border-amber-300 bg-amber-50 px-4 py-0 text-sm text-amber-900 shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:border-amber-400 hover:bg-amber-100 hover:shadow-xl"
-                >
-                  genutzt löschen
-                </button>
-
-                {selectionComplete && (
                   <button
                     type="button"
-                    onClick={onContinue}
-                    className="inline-flex h-[48px] cursor-pointer items-center rounded-xl border border-[#4EA72E] bg-[#4EA72E] px-5 py-0 text-sm font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-xl"
+                    onClick={() => {
+                      setMode('random');
+                      setError(null);
+                    }}
+                    className={[
+                      'rounded-lg px-3 py-2 text-sm transition shadow-sm',
+                      mode === 'random'
+                        ? 'border-2 border-[#F29420] bg-[#FFF3E8] font-semibold text-slate-900'
+                        : 'border border-slate-300 bg-white text-slate-900 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#F29420] hover:bg-[#FFF3E8] hover:shadow-xl cursor-pointer',
+                    ].join(' ')}
                   >
-                    Weiter
+                    Zufall
                   </button>
-                )}
-
-                <div className="ml-auto inline-flex h-[48px] items-center rounded-xl border border-[#F29420] bg-white px-4 py-0 text-base font-semibold text-slate-900">
-                  Ausgewählt:&nbsp;<span className="font-semibold">{selectedThemes.length}</span>&nbsp;/&nbsp;{weeksCount}
                 </div>
               </div>
+            </div>
 
-              {error && (
-                <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                  {error}
-                </div>
+            <div className="mt-4 mb-4 flex flex-wrap items-center gap-2">
+              {mode === 'random' && (
+                <button
+                  type="button"
+                  onClick={pickRandomThemes}
+                  className={[
+                    'inline-flex h-[48px] cursor-pointer items-center rounded-xl px-4 py-0 text-sm shadow-sm transition',
+                    mode === 'random'
+                      ? 'border-2 border-[#F29420] bg-[#FFF3E8] font-semibold text-slate-900 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#E4891E] hover:bg-[#FCE7D1] hover:shadow-xl'
+                      : 'border border-slate-300 bg-white text-slate-900 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#F29420] hover:bg-[#FFF3E8] hover:shadow-xl',
+                  ].join(' ')}
+                >
+                  Zufallsauswahl erzeugen
+                </button>
               )}
 
-              {showThemesList && (
-                <div className="mt-4">
-                  <div className="mb-3 rounded-2xl border border-[#F29420] bg-white p-4 text-base text-slate-700 shadow-sm">
-                    <p>
-                      <span className="font-semibold text-slate-900">Themen</span> (alphabetisch)
-                    </p>
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="inline-flex h-[48px] cursor-pointer items-center rounded-xl border border-slate-300 bg-white px-4 py-0 text-sm text-black shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:shadow-xl"
+              >
+                Auswahl aufheben
+              </button>
 
-                    <p className="mt-3">
-                      Maximal <span className="font-semibold text-slate-900">4 Themen</span> sind in der kostenlosen Version
-                      freigeschaltet. Sobald die gewünschte <span className="font-semibold text-slate-900">Anzahl</span> erreicht
-                      ist, wird die Themenliste automatisch ausgeblendet. So erscheint{' '}
-                      <span className="font-semibold text-slate-900">„Deine Auswahl“</span> direkt im Blick.
-                    </p>
+              <button
+                type="button"
+                onClick={clearUsedThemes}
+                className="inline-flex h-[48px] cursor-pointer items-center rounded-xl border border-amber-300 bg-amber-50 px-4 py-0 text-sm text-amber-900 shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:border-amber-400 hover:bg-amber-100 hover:shadow-xl"
+              >
+                genutzt löschen
+              </button>
 
-                    <p className="mt-3">
-                      Dort siehst du <span className="font-semibold text-slate-900">Bild</span>,{' '}
-                      <span className="font-semibold text-slate-900">Titel</span> und{' '}
-                      <span className="font-semibold text-slate-900">Zeitraum</span> deiner gewählten Themen. Bereits genutzte{' '}
-                      <span className="font-semibold text-slate-900">Themen</span> bleiben auswählbar – sie sind nur markiert.
-                      Die Reihenfolge kann ganz unten beliebig verändert werden.
-                    </p>
+              {selectionComplete && (
+                <button
+                  type="button"
+                  onClick={onContinue}
+                  className="inline-flex h-[48px] cursor-pointer items-center rounded-xl border border-[#4EA72E] bg-[#4EA72E] px-5 py-0 text-sm font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#3f8a25] hover:bg-[#3f8a25] hover:shadow-xl"
+                >
+                  Weiter
+                </button>
+              )}
 
-                    <p className="mt-3">
-                      Wähle genau <span className="font-semibold text-slate-900">{weeksCount}</span> Thema/Themen aus.
-                    </p>
-                  </div>
+              <div className="ml-auto inline-flex h-[48px] items-center rounded-xl border border-[#F29420] bg-white px-4 py-0 text-base font-semibold text-slate-900">
+                Ausgewählt:&nbsp;<span className="font-semibold">{selectedThemes.length}</span>&nbsp;/&nbsp;{weeksCount}
+              </div>
+            </div>
 
-                  <div className="rounded-2xl border border-slate-200 bg-white p-2 sm:p-3" aria-label="Themenliste">
-                    <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                      {sortedThemes.map((t) => {
-                        const isAllowedInFree = !isFree || FREE_ALLOWED_THEMES.has(t.id);
-                        const isSelected = selectedSet.has(t.id);
-                        const isUsed = usedSet.has(t.id);
+            {error && (
+              <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                {error}
+              </div>
+            )}
 
-                        const disabled =
-                          !isAllowedInFree || (mode === 'manual' && !isSelected && selectedThemes.length >= weeksCount);
+            {showThemesList && (
+              <div className="mt-4">
+                <div className="mb-3 rounded-2xl border border-[#F29420] bg-white p-4 text-base text-slate-700 shadow-sm">
+                  <p>
+                    <span className="font-semibold text-slate-900">Themen</span> (alphabetisch)
+                  </p>
 
-                        const dimBecauseLimit =
-                          (mode === 'manual' && !isSelected && selectedThemes.length >= weeksCount) ||
-                          (mode === 'random' && selectedThemes.length > 0 && !isSelected);
+                  <p className="mt-3">
+                    Maximal <span className="font-semibold text-slate-900">4 Themen</span> sind in der kostenlosen Version
+                    freigeschaltet. Sobald die gewünschte <span className="font-semibold text-slate-900">Anzahl</span> erreicht ist,
+                    wird die Themenliste automatisch ausgeblendet. So erscheint{' '}
+                    <span className="font-semibold text-slate-900">„Deine Auswahl“</span> direkt im Blick.
+                  </p>
 
-                        return (
-                          <li key={t.id} className="min-w-0">
-                            <button
-                              type="button"
-                              disabled={disabled}
-                              onClick={() => {
-                                if (mode === 'random') return;
-                                toggleTheme(t.id);
-                              }}
-                              className={[
-                                'w-full min-w-0 rounded-xl border p-3 text-left transition',
-                                isSelected
-                                  ? 'border-[#F29420] bg-[#F29420] text-white'
-                                  : 'border-slate-200 bg-white text-slate-900 hover:bg-slate-50',
-                                disabled || dimBecauseLimit ? 'cursor-not-allowed opacity-40' : '',
-                              ].join(' ')}
-                            >
-                              <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start">
-                                <div className="h-32 w-full overflow-hidden rounded-xl bg-slate-100 sm:h-24 sm:w-32 sm:shrink-0">
+                  <p className="mt-3">
+                    Dort siehst du <span className="font-semibold text-slate-900">Bild</span>,{' '}
+                    <span className="font-semibold text-slate-900">Titel</span> und{' '}
+                    <span className="font-semibold text-slate-900">Zeitraum</span> deiner gewählten Themen. Bereits genutzte{' '}
+                    <span className="font-semibold text-slate-900">Themen</span> bleiben auswählbar – sie sind nur markiert. Die
+                    Reihenfolge kann ganz unten beliebig verändert werden.
+                  </p>
+
+                  <p className="mt-3">
+                    Wähle genau <span className="font-semibold text-slate-900">{weeksCount}</span> Thema/Themen aus.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-2 sm:p-3" aria-label="Themenliste">
+                  <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {sortedThemes.map((t) => {
+                      const isAllowedInFree = FREE_ALLOWED_THEMES.has(t.id);
+                      const isSelected = selectedSet.has(t.id);
+                      const isUsed = usedSet.has(t.id);
+
+                      const disabled =
+                        !isAllowedInFree || (mode === 'manual' && !isSelected && selectedThemes.length >= weeksCount);
+
+                      const dimBecauseLimit =
+                        (mode === 'manual' && !isSelected && selectedThemes.length >= weeksCount) ||
+                        (mode === 'random' && selectedThemes.length > 0 && !isSelected);
+
+                      return (
+                        <li key={t.id} className="min-w-0">
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => {
+                              if (mode === 'random') return;
+                              toggleTheme(t.id);
+                            }}
+                            className={[
+                              'w-full min-w-0 rounded-xl border p-3 text-left transition',
+                              isSelected
+                                ? 'border-[#F29420] bg-[#F29420] text-white'
+                                : 'border-slate-200 bg-white text-slate-900 hover:bg-slate-50',
+                              disabled || dimBecauseLimit ? 'cursor-not-allowed opacity-40' : '',
+                            ].join(' ')}
+                          >
+                            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start">
+                              <div className="h-32 w-full overflow-hidden rounded-xl bg-slate-100 sm:h-24 sm:w-32 sm:shrink-0">
+                                <img
+                                  src={`/images/themes/${t.id}.jpg`}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLImageElement).src = '/images/demo.jpg';
+                                  }}
+                                />
+                              </div>
+
+                              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {isUsed && (
+                                    <span
+                                      className={[
+                                        'rounded-full px-2 py-0.5 text-xs',
+                                        isSelected
+                                          ? 'border border-white/25 bg-white/10 text-white'
+                                          : 'border border-amber-200 bg-amber-50 text-amber-800',
+                                      ].join(' ')}
+                                    >
+                                      genutzt
+                                    </span>
+                                  )}
+
+                                  {isSelected && (
+                                    <span className="rounded-full border border-white/25 bg-white/10 px-2 py-0.5 text-xs text-white">
+                                      ✓ ausgewählt
+                                    </span>
+                                  )}
+
+                                  {!isAllowedInFree && (
+                                    <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                                      Vollversion
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="min-w-0">
+                                  <div
+                                    className={[
+                                      'text-base font-semibold leading-6 break-words',
+                                      isSelected ? 'text-white' : 'text-slate-900',
+                                    ].join(' ')}
+                                  >
+                                    Thema {String(t.id).match(/-(\d{2})-/)?.[1] ?? ''}
+                                  </div>
+                                  <div
+                                    className={[
+                                      'text-base font-semibold leading-6 break-words',
+                                      isSelected ? 'text-white' : 'text-slate-900',
+                                    ].join(' ')}
+                                  >
+                                    {displayTitle(t)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-4 sm:px-6 lg:px-7">
+            <div className="text-sm text-slate-800">
+              <span className="text-base font-semibold">Deine Auswahl</span>{' '}
+              <span className="font-medium">(Reihenfolge nach Auswahl mit Pfeiltasten frei veränderbar)</span>
+            </div>
+
+            {selectedThemes.length === 0 ? (
+              <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
+                Noch nichts ausgewählt.
+              </div>
+            ) : (
+              <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <div className="hidden border-b border-slate-200 bg-slate-50 sm:grid sm:grid-cols-[minmax(170px,220px)_1fr]">
+                  <div className="px-3 py-2 text-center text-sm font-semibold text-slate-900">Datum</div>
+                  <div className="px-3 py-2 text-sm font-semibold text-slate-900">Thema</div>
+                </div>
+
+                <div className="divide-y divide-slate-200">
+                  {selectedScheduleRows.map((item, i) => {
+                    const isFirst = i === 0;
+                    const isLast = i === selectedScheduleRows.length - 1;
+
+                    return (
+                      <div key={`${item.id}-${i}`} className="grid grid-cols-1 sm:grid-cols-[minmax(170px,220px)_1fr]">
+                        <div className="flex items-center justify-center border-b border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800 sm:border-b-0 sm:border-r">
+                          <div className="w-full text-center">
+                            <span className="block text-center text-xs font-semibold uppercase tracking-wide text-slate-500 sm:hidden">
+                              Datum
+                            </span>
+                            {item.dateRange}
+                          </div>
+                        </div>
+
+                        <div className="px-3 py-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0 flex-1">
+                              <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500 sm:hidden">
+                                Thema
+                              </span>
+
+                              <div className="flex min-w-0 items-center gap-4">
+                                <div className="h-24 w-32 shrink-0 overflow-hidden rounded-xl bg-slate-100">
                                   <img
-                                    src={`/images/themes/${t.id}.jpg`}
+                                    src={`/images/themes/${item.id}.jpg`}
                                     alt=""
                                     className="h-full w-full object-cover"
                                     onError={(e) => {
@@ -645,174 +763,63 @@ export default function ThemesPage() {
                                   />
                                 </div>
 
-                                <div className="flex min-w-0 flex-1 flex-col gap-2">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    {isUsed && (
-                                      <span
-                                        className={[
-                                          'rounded-full px-2 py-0.5 text-xs',
-                                          isSelected
-                                            ? 'border border-white/25 bg-white/10 text-white'
-                                            : 'border border-amber-200 bg-amber-50 text-amber-800',
-                                        ].join(' ')}
-                                      >
-                                        genutzt
-                                      </span>
-                                    )}
-
-                                    {isSelected && (
-                                      <span className="rounded-full border border-white/25 bg-white/10 px-2 py-0.5 text-xs text-white">
-                                        ✓ ausgewählt
-                                      </span>
-                                    )}
-
-                                    {!isAllowedInFree && (
-                                      <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                                        Vollversion
-                                      </span>
-                                    )}
+                                <div className="min-w-0">
+                                  <div className="text-base font-semibold leading-6 break-words text-slate-900">
+                                    Thema {String(item.id).match(/-(\d{2})-/)?.[1] ?? ''}
                                   </div>
-
-                                  <div className="min-w-0">
-                                    <div
-                                      className={[
-                                        'text-base font-semibold leading-6 break-words',
-                                        isSelected ? 'text-white' : 'text-slate-900',
-                                      ].join(' ')}
-                                    >
-                                      Thema {String(t.id).match(/-(\d{2})-/)?.[1] ?? ''}
-                                    </div>
-                                    <div
-                                      className={[
-                                        'text-base font-semibold leading-6 break-words',
-                                        isSelected ? 'text-white' : 'text-slate-900',
-                                      ].join(' ')}
-                                    >
-                                      {displayTitle(t)}
-                                    </div>
+                                  <div className="text-base font-semibold leading-6 break-words text-slate-900">
+                                    {item.title}
                                   </div>
                                 </div>
                               </div>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-4 sm:px-6 lg:px-7">
-              <div className="text-sm text-slate-800">
-                <span className="text-base font-semibold">Deine Auswahl</span>{' '}
-                <span className="font-medium">(Reihenfolge nach Auswahl mit Pfeiltasten frei veränderbar)</span>
-              </div>
-
-              {selectedThemes.length === 0 ? (
-                <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
-                  Noch nichts ausgewählt.
-                </div>
-              ) : (
-                <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                  <div className="hidden border-b border-slate-200 bg-slate-50 sm:grid sm:grid-cols-[minmax(170px,220px)_1fr]">
-                    <div className="px-3 py-2 text-center text-sm font-semibold text-slate-900">Datum</div>
-                    <div className="px-3 py-2 text-sm font-semibold text-slate-900">Thema</div>
-                  </div>
-
-                  <div className="divide-y divide-slate-200">
-                    {selectedScheduleRows.map((item, i) => {
-                      const isFirst = i === 0;
-                      const isLast = i === selectedScheduleRows.length - 1;
-
-                      return (
-                        <div key={`${item.id}-${i}`} className="grid grid-cols-1 sm:grid-cols-[minmax(170px,220px)_1fr]">
-                          <div className="flex items-center justify-center border-b border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800 sm:border-b-0 sm:border-r">
-                            <div className="w-full text-center">
-                              <span className="block text-center text-xs font-semibold uppercase tracking-wide text-slate-500 sm:hidden">
-                                Datum
-                              </span>
-                              {item.dateRange}
                             </div>
-                          </div>
 
-                          <div className="px-3 py-3">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="min-w-0 flex-1">
-                                <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500 sm:hidden">
-                                  Thema
-                                </span>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => moveSelectedTheme(i, -1)}
+                                disabled={isFirst}
+                                className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg border border-[#F29420] bg-[#F29420] px-2 py-1 text-sm font-semibold text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-40"
+                                title="Hoch"
+                                aria-label="Thema nach oben schieben"
+                              >
+                                ▲
+                              </button>
 
-                                <div className="flex min-w-0 items-center gap-4">
-                                  <div className="h-24 w-32 shrink-0 overflow-hidden rounded-xl bg-slate-100">
-                                    <img
-                                      src={`/images/themes/${item.id}.jpg`}
-                                      alt=""
-                                      className="h-full w-full object-cover"
-                                      onError={(e) => {
-                                        (e.currentTarget as HTMLImageElement).src = '/images/demo.jpg';
-                                      }}
-                                    />
-                                  </div>
-
-                                  <div className="min-w-0">
-                                    <div className="text-base font-semibold leading-6 break-words text-slate-900">
-                                      Thema {String(item.id).match(/-(\d{2})-/)?.[1] ?? ''}
-                                    </div>
-                                    <div className="text-base font-semibold leading-6 break-words text-slate-900">
-                                      {item.title}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex shrink-0 items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => moveSelectedTheme(i, -1)}
-                                  disabled={isFirst}
-                                  className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg border border-[#F29420] bg-[#F29420] px-2 py-1 text-sm font-semibold text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-40"
-                                  title="Hoch"
-                                  aria-label="Thema nach oben schieben"
-                                >
-                                  ▲
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => moveSelectedTheme(i, 1)}
-                                  disabled={isLast}
-                                  className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg border border-[#F29420] bg-[#F29420] px-2 py-1 text-sm font-semibold text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-40"
-                                  title="Runter"
-                                  aria-label="Thema nach unten schieben"
-                                >
-                                  ▼
-                                </button>
-                              </div>
+                              <button
+                                type="button"
+                                onClick={() => moveSelectedTheme(i, 1)}
+                                disabled={isLast}
+                                className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg border border-[#F29420] bg-[#F29420] px-2 py-1 text-sm font-semibold text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-[#E4891E] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-40"
+                                title="Runter"
+                                aria-label="Thema nach unten schieben"
+                              >
+                                ▼
+                              </button>
                             </div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+            )}
 
-              {selectionComplete && (
-                <div className="mt-4 flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={onContinue}
-                    className="inline-flex h-[48px] items-center rounded-xl border border-[#4EA72E] bg-[#4EA72E] px-5 py-0 text-sm font-medium text-white transition hover:bg-[#3f8a25]"
-                  >
-                    Weiter
-                  </button>
-                </div>
-              )}
-            </div>
+            {selectionComplete && (
+              <div className="mt-4 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={onContinue}
+                  className="inline-flex h-[48px] items-center rounded-xl border border-[#4EA72E] bg-[#4EA72E] px-5 py-0 text-sm font-medium text-white transition hover:bg-[#3f8a25]"
+                >
+                  Weiter
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      </BackgroundLayout>
-    </AuthWrapper>
+      </div>
+    </BackgroundLayout>
   );
 }

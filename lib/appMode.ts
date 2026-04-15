@@ -5,7 +5,7 @@ export type AppMode = 'free' | 'full';
 export function getAppMode(): AppMode {
   if (typeof window === 'undefined') return 'full';
   const mode = window.localStorage.getItem(APP_MODE_KEY);
-return mode === 'free' || mode === 'full' ? mode : 'full';
+  return mode === 'free' || mode === 'full' ? mode : 'full';
 }
 
 export const FREE_ALLOWED_THEMES = new Set<string>([
@@ -15,4 +15,4 @@ export const FREE_ALLOWED_THEMES = new Set<string>([
   'ed1-04-ehrlichkeit',
 ]);
 
-export const FREE_WEEKS_COUNT = 2;
+export const FREE_WEEKS_COUNT = 4;
